@@ -1,0 +1,16 @@
+[project]
+name = "controllable-face-generation-vae-by-farhad-dalirani"
+version = "0.1.0"
+description = "This project provides a controllable generative model using a Convolutional Variational Autoencoder to generate faces with desirable features. Moreover, it offers additional capabilities such as reconstructing input images, performing latent space arithmetic to enhance or remove attributes in generated images, and morphing pairs of human faces."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "tensorflow[gpu]>=2.20.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "tensorboard>=2.0.0",
+    "tqdm>=4.67.1",
+    "streamlit>=1.49.1",
+    "matplotlib>=3.9.4",
+    "opencv-python>=4.12.0.88",
+]

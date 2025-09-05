@@ -1,0 +1,21 @@
+{
+    "embedding_size": 512,
+    "num_channels": 128,
+    "beta": 1.0,
+    "input_img_size": 64,
+    "batch_size": 128,
+    "lr": 0.0001,
+    "max_epoch": 100,
+    "dataset_dir": "celeba-dataset",
+    "model_save_path": "model_weights/",
+    "loss_config": {
+        "use_mse": true,
+        "use_l1": true,
+        "use_perceptual_loss": false,
+        "use_lpips": true,
+        "mse_weight": 0.6,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.0,
+        "lpips_weight": 0.2
+    }
+}

@@ -2,36 +2,35 @@ import streamlit as st
 import os
 import json
 import numpy as np
-import tensorflow as tf
-from variational_autoencoder import VAE
-from utilities import get_split_data
-from synthesis import generate_images, reconstruct_images, latent_arithmetic_on_images, morph_images, generate_images_with_selected_attributes_vectors
+import torch
+import torch.nn as nn
+from variation_autoencoder_pytorch import VAE_pt
+from utilities_pytorch import get_split_data
+from synthesis_pytorch import generate_images, reconstruct_images, latent_arithmetic_on_images, morph_images, generate_images_with_selected_attributes_vectors
 
 # GPU Configuration
 def configure_gpu():
     """Configure GPU settings for optimal performance"""
-    gpus = tf.config.experimental.list_physical_devices('GPU')
-    if gpus:
-        try:
-            # Enable memory growth to avoid allocating all GPU memory at once
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-            
-            print(f"GPU devices found: {len(gpus)}")
-            for i, gpu in enumerate(gpus):
-                print(f"GPU {i}: {gpu.name}")
-        except RuntimeError as e:
-            print(f"GPU configuration error: {e}")
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
+    if torch.cuda.is_available():
+        print(f"GPU devices found: {torch.cuda.device_count()}")
+        for i in range(torch.cuda.device_count()):
+            print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
+        print(f"Current GPU: {torch.cuda.current_device()}")
+        print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
     else:
         print("No GPU devices found. Running on CPU.")
     
-    # Print TensorFlow version and device info
-    print(f"TensorFlow version: {tf.__version__}")
-    print(f"Available devices: {tf.config.list_physical_devices()}")
+    # Print PyTorch version and device info
+    print(f"PyTorch version: {torch.__version__}")
+    print(f"Using device: {device}")
+    
+    return device
 
 
-def main(config, model_vae, validation):
-    st.title("Controllable Face Generation VAE")
+def main(config, model_vae, validation, device):
+    st.title("Controllable Face Generation VAE (PyTorch)")
     st.sidebar.title("Settings")
     st.sidebar.subheader("Features")
 
@@ -68,42 +67,63 @@ def main(config, model_vae, validation):
             attributes_vectors.append(np.array(st.session_state["attribute_vectors"][attribute_key]) * st.session_state['attribute_sliders'][attribute_key])
         
         if 'images_generated' not in st.session_state:
-            st.session_state.images_generated = generate_images_with_selected_attributes_vectors(decoder=model_vae.dec, emd_size=config['embedding_size'], attributes_vectors=attributes_vectors)
+            st.session_state.images_generated = generate_images_with_selected_attributes_vectors(
+                decoder=model_vae.dec, 
+                emd_size=config['embedding_size'], 
+                attributes_vectors=attributes_vectors,
+                device=device)
         if st.button('Generate New Faces'):
-            st.session_state.images_generated = generate_images_with_selected_attributes_vectors(decoder=model_vae.dec, emd_size=config['embedding_size'], attributes_vectors=attributes_vectors)
+            st.session_state.images_generated = generate_images_with_selected_attributes_vectors(
+                decoder=model_vae.dec, 
+                emd_size=config['embedding_size'], 
+                attributes_vectors=attributes_vectors,
+                device=device)
 
-        st.image(st.session_state.images_generated)
+        st.image(st.session_state.images_generated, width=800)
         
     elif app_feature == 'Reconstruct Faces':
         st.markdown("Randomly select faces from the CelebA dataset, feed them to a variational autoencoder, and depict the reconstructed faces")
         
         if 'images_rec' not in st.session_state:
-            st.session_state.images_rec = reconstruct_images(model_vae, validation)
+            st.session_state.images_rec = reconstruct_images(model_vae, validation, device)
 
         if st.button('Reconstruct New Faces'):
-            st.session_state.images_rec = reconstruct_images(model_vae, validation)
+            st.session_state.images_rec = reconstruct_images(model_vae, validation, device)
 
-        st.image(st.session_state.images_rec)
+        st.image(st.session_state.images_rec, width=800)
 
     elif app_feature == 'Face Latent Space Arithmetic':
         st.markdown("Perform arithmetic operations in the latent space of faces based on selected attributes")
 
         # Dropdown to select attribute keys
-        st.session_state.attribute_key = st.selectbox("Select Attribute Key", list(st.session_state["attribute_vectors"].keys()),
-                                                       index=list(st.session_state["attribute_vectors"].keys()).index('Blond_Hair'))
+        attribute_keys = list(st.session_state["attribute_vectors"].keys())
+        if attribute_keys:
+            # Try to find 'Blond_Hair' or use first available
+            try:
+                default_index = attribute_keys.index('Blond_Hair')
+            except ValueError:
+                default_index = 0
+            st.session_state.attribute_key = st.selectbox("Select Attribute Key",
+                                                          options=attribute_keys,
+                                                          index=default_index)
+        else:
+            st.warning("No attribute vectors available. Please generate attribute embeddings first.")
+            st.session_state.attribute_key = None
 
-        if 'images_latent_arith' not in st.session_state:
+        if st.session_state.attribute_key is not None and 'images_latent_arith' not in st.session_state:
             st.session_state.images_latent_arith = latent_arithmetic_on_images(
                                                         config, model_vae,
                                                         attribute_vector=np.array(st.session_state["attribute_vectors"][st.session_state.attribute_key]),
-                                                        num_images=10)
+                                                        num_images=10,
+                                                        device=device)
 
-        if st.button('Perform Latent Space Arithmetic'):
+        if st.button('Perform Latent Space Arithmetic') and st.session_state.attribute_key is not None:
             st.session_state.images_latent_arith = latent_arithmetic_on_images(
                                                         config, 
                                                         model_vae, 
                                                         attribute_vector=np.array(st.session_state["attribute_vectors"][st.session_state.attribute_key]), 
-                                                        num_images=7)
+                                                        num_images=7,
+                                                        device=device)
 
         st.markdown("""
         <div style="background-color:#f0f0f0;padding:10px;border-radius:5px;">
@@ -112,17 +132,20 @@ def main(config, model_vae, validation):
         """.format(st.session_state.attribute_key), unsafe_allow_html=True)
         
         st.markdown('<div style="display: flex; justify-content: center; align-items: center;">', unsafe_allow_html=True)
-        st.image(st.session_state.images_latent_arith)
+        if st.session_state.attribute_key is not None and 'images_latent_arith' in st.session_state:
+            st.image(st.session_state.images_latent_arith, width=800)
+        else:
+            st.info("Please select an attribute and click 'Perform Latent Space Arithmetic' to generate images.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     elif app_feature == 'Morph Faces':
         st.markdown("Generate faces and blend them together by calculating points between the embeddings of two faces.")
 
         if 'images_morph' not in st.session_state:
-            st.session_state.images_morph = morph_images(config, model_vae, num_images=10)
+            st.session_state.images_morph = morph_images(config, model_vae, num_images=10, device=device)
 
         if st.button('Morph Faces'):
-            st.session_state.images_morph = morph_images(config, model_vae, num_images=10)
+            st.session_state.images_morph = morph_images(config, model_vae, num_images=10, device=device)
         
         st.markdown("""
         <div style="background-color:#f0f0f0;padding:10px;border-radius:5px;">
@@ -130,12 +153,12 @@ def main(config, model_vae, validation):
         </div>
         """, unsafe_allow_html=True)
         
-        st.image(st.session_state.images_morph)
+        st.image(st.session_state.images_morph, width=800)
 
 if __name__ == '__main__':
     
     # Configure GPU settings
-    configure_gpu()
+    device = configure_gpu()
     
     # Define the path to the configuration file
     config_path = 'config/config.json'
@@ -147,15 +170,23 @@ if __name__ == '__main__':
     # Check if the VAE model is already loaded in the session state
     if "model" not in st.session_state.keys():
         # Instantiate and load the VAE model with specified parameters
-        st.session_state["model"] = VAE(
+        st.session_state["model"] = VAE_pt(
             input_img_size=config["input_img_size"], 
             embedding_size=config["embedding_size"], 
             num_channels=config["num_channels"], 
             beta=config["beta"])
+        
         # Load model weights from the specified path
-        st.session_state["model"].load_weights(os.path.join(config["model_save_path"], "vae.keras"))
-        # Print model summary for verification
-        st.session_state["model"].summary()
+        model_path = os.path.join(config["model_save_path"], "vae.pth")
+        if os.path.exists(model_path):
+            st.session_state["model"].load_state_dict(torch.load(model_path, map_location=device))
+            st.session_state["model"] = st.session_state["model"].to(device)
+            st.session_state["model"].eval()
+            print(f"PyTorch model loaded from {model_path}")
+        else:
+            st.error(f"Model file not found: {model_path}")
+            st.error("Please train the model first using train_VAE_pytorch.py")
+            st.stop()
 
     # Check if the validation dataset is already loaded in the session state
     if "val_data" not in st.session_state.keys():
@@ -164,12 +195,16 @@ if __name__ == '__main__':
     
     # Check if attribute vectors for latent space are already loaded in the session state
     if "attribute_vectors" not in st.session_state.keys():
-        # Open and read attribute vectors from the specified file
-        with open("attributes_embedings/attributes_embedings.json", 'r') as f:
-            st.session_state["attribute_vectors"] = json.load(f)
+        # Try to load attribute vectors, but make it optional
+        try:
+            with open("attributes_embedings/attributes_embedings.json", 'r') as f:
+                st.session_state["attribute_vectors"] = json.load(f)
+        except FileNotFoundError:
+            st.warning("Attribute embeddings file not found. Some features may be limited.")
+            st.session_state["attribute_vectors"] = {}
 
     # Run the main application function, handling SystemExit to allow for graceful exit    
     try:
-        main(config, st.session_state["model"], st.session_state["val_data"])
+        main(config, st.session_state["model"], st.session_state["val_data"], device)
     except SystemExit:
         pass

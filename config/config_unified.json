@@ -1,0 +1,217 @@
+{
+    "_comment": "Unified VAE Configuration with Multiple Loss Function Presets",
+    "_documentation": "This file contains all VAE training configurations in one place for easy management",
+    
+    "base_config": {
+        "embedding_size": 512,
+        "num_channels": 128,
+        "beta": 1.0,
+        "input_img_size": 64,
+        "batch_size": 128,
+        "lr": 0.0001,
+        "max_epoch": 100,
+        "dataset_dir": "celeba-dataset",
+        "model_save_path": "model_weights/",
+        "dataset_subset": null
+    },
+    
+    "loss_presets": {
+        "_comment": "Predefined loss function configurations for different use cases",
+        
+        "mse_only": {
+            "_description": "Pure MSE loss - fastest training but blurriest results",
+            "_use_case": "Quick testing, baseline comparison",
+            "_pros": "Stable, fast training",
+            "_cons": "Very blurry images",
+            "use_mse": true,
+            "use_l1": false,
+            "use_perceptual_loss": false,
+            "use_lpips": false,
+            "mse_weight": 1.0,
+            "l1_weight": 0.0,
+            "perceptual_weight": 0.0,
+            "lpips_weight": 0.0
+        },
+        
+        "mse_l1": {
+            "_description": "MSE + L1 loss - good balance of quality and speed",
+            "_use_case": "Recommended for most users, good starting point",
+            "_pros": "Sharper images, stable training",
+            "_cons": "Still some blurriness",
+            "use_mse": true,
+            "use_l1": true,
+            "use_perceptual_loss": false,
+            "use_lpips": false,
+            "mse_weight": 0.8,
+            "l1_weight": 0.2,
+            "perceptual_weight": 0.0,
+            "lpips_weight": 0.0
+        },
+        
+        "perceptual": {
+            "_description": "MSE + L1 + Perceptual loss - high quality with realistic textures",
+            "_use_case": "High quality generation, better textures",
+            "_pros": "Realistic textures, better high-level features",
+            "_cons": "Slower training, more memory usage",
+            "use_mse": true,
+            "use_l1": true,
+            "use_perceptual_loss": true,
+            "use_lpips": false,
+            "mse_weight": 0.6,
+            "l1_weight": 0.2,
+            "perceptual_weight": 0.2,
+            "lpips_weight": 0.0
+        },
+        
+        "lpips": {
+            "_description": "MSE + L1 + LPIPS loss - best perceptual quality",
+            "_use_case": "Best possible quality, research applications",
+            "_pros": "Best perceptual similarity, most realistic",
+            "_cons": "Slowest training, requires LPIPS dependency",
+            "use_mse": true,
+            "use_l1": true,
+            "use_perceptual_loss": false,
+            "use_lpips": true,
+            "mse_weight": 0.6,
+            "l1_weight": 0.2,
+            "perceptual_weight": 0.0,
+            "lpips_weight": 0.2
+        },
+        
+        "custom_balanced": {
+            "_description": "Custom balanced configuration - moderate quality and speed",
+            "_use_case": "Custom tuning, specific requirements",
+            "_pros": "Balanced approach",
+            "_cons": "May need fine-tuning",
+            "use_mse": true,
+            "use_l1": true,
+            "use_perceptual_loss": false,
+            "use_lpips": false,
+            "mse_weight": 0.7,
+            "l1_weight": 0.3,
+            "perceptual_weight": 0.0,
+            "lpips_weight": 0.0
+        },
+        
+        "high_quality": {
+            "_description": "High quality configuration - best balance of all losses",
+            "_use_case": "Production use, best quality without LPIPS",
+            "_pros": "High quality, good textures, sharp details",
+            "_cons": "Slower than basic configs",
+            "use_mse": true,
+            "use_l1": true,
+            "use_perceptual_loss": true,
+            "use_lpips": false,
+            "mse_weight": 0.5,
+            "l1_weight": 0.3,
+            "perceptual_weight": 0.2,
+            "lpips_weight": 0.0
+        }
+    },
+    
+    "training_presets": {
+        "_comment": "Different training configurations for various scenarios",
+        
+        "quick_test": {
+            "_description": "Quick testing configuration - 1 epoch, small batch",
+            "_use_case": "Quick validation, debugging",
+            "max_epoch": 1,
+            "batch_size": 64,
+            "lr": 0.001
+        },
+        
+        "fast_training": {
+            "_description": "Fast training - 20 epochs, larger batch",
+            "_use_case": "Quick results, limited time",
+            "max_epoch": 20,
+            "batch_size": 256,
+            "lr": 0.0005
+        },
+        
+        "standard_training": {
+            "_description": "Standard training - 50 epochs, balanced settings",
+            "_use_case": "Normal training, good results",
+            "max_epoch": 50,
+            "batch_size": 128,
+            "lr": 0.0001
+        },
+        
+        "extended_training": {
+            "_description": "Extended training - 100 epochs, careful settings",
+            "_use_case": "Best quality, research, production",
+            "max_epoch": 100,
+            "batch_size": 128,
+            "lr": 0.0001
+        }
+    },
+    
+    "model_presets": {
+        "_comment": "Different model architectures for various needs",
+        
+        "small": {
+            "_description": "Small model - fast inference, less memory",
+            "_use_case": "Mobile, embedded, quick inference",
+            "embedding_size": 256,
+            "num_channels": 64,
+            "input_img_size": 64
+        },
+        
+        "medium": {
+            "_description": "Medium model - balanced performance",
+            "_use_case": "General use, good quality",
+            "embedding_size": 512,
+            "num_channels": 128,
+            "input_img_size": 64
+        },
+        
+        "large": {
+            "_description": "Large model - best quality, more memory",
+            "_use_case": "High quality generation, research",
+            "embedding_size": 1024,
+            "num_channels": 256,
+            "input_img_size": 64
+        },
+        
+        "high_res": {
+            "_description": "High resolution model - 128x128 images",
+            "_use_case": "High resolution generation",
+            "embedding_size": 512,
+            "num_channels": 128,
+            "input_img_size": 128
+        }
+    },
+    
+    "dataset_presets": {
+        "_comment": "Different dataset sizes for various development and testing needs",
+        
+        "tiny": {
+            "_description": "Tiny dataset - 1000 samples for quick testing",
+            "_use_case": "Debugging, architecture testing, very fast iteration",
+            "dataset_subset": 1000
+        },
+        
+        "small": {
+            "_description": "Small dataset - 10000 samples for development",
+            "_use_case": "Development, quick experiments, limited resources",
+            "dataset_subset": 10000
+        },
+        
+        "medium": {
+            "_description": "Medium dataset - 50000 samples for balanced testing",
+            "_use_case": "Balanced testing, moderate quality validation",
+            "dataset_subset": 50000
+        },
+        
+        "large": {
+            "_description": "Large dataset - 100000 samples for good quality",
+            "_use_case": "Good quality training, production-like testing",
+            "dataset_subset": 100000
+        },
+        
+        "full": {
+            "_description": "Full dataset - all available samples",
+            "_use_case": "Production training, best possible quality",
+            "dataset_subset": null
+        }
+    }
+}

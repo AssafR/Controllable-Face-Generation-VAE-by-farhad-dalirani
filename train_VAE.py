@@ -7,6 +7,32 @@ from tensorflow.keras import optimizers, callbacks
 from variational_autoencoder import VAE
 from utilities import get_split_data
 
+# GPU Configuration
+def configure_gpu():
+    """Configure GPU settings for optimal performance"""
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        try:
+            # Enable memory growth to avoid allocating all GPU memory at once
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+            
+            # Set mixed precision policy for better GPU performance
+            tf.keras.mixed_precision.set_global_policy('mixed_float16')
+            
+            print(f"GPU devices found: {len(gpus)}")
+            for i, gpu in enumerate(gpus):
+                print(f"GPU {i}: {gpu.name}")
+        except RuntimeError as e:
+            print(f"GPU configuration error: {e}")
+    else:
+        print("No GPU devices found. Running on CPU.")
+    
+    # Print TensorFlow version and device info
+    print(f"TensorFlow version: {tf.__version__}")
+    print(f"Keras backend: {K.backend()}")
+    print(f"Available devices: {tf.config.list_physical_devices()}")
+
 def train_variational_autoencoder(config, train, validation):
     """ Train Variatioanl Autoencoder """
 
@@ -50,6 +76,9 @@ def train_variational_autoencoder(config, train, validation):
     model_vae.dec.save(os.path.join(config["model_save_path"], "decoder.keras"))
 
 if __name__ == '__main__':
+    
+    # Configure GPU settings
+    configure_gpu()
     
     # Path to config file
     config_path = 'config/config.json'

@@ -10,11 +10,23 @@ The model is trained on the CelebA dataset [1, 2], and TensorFlow Keras and Stre
 
 # How to use
 
-- Download Celeba dataset and palce it in data folder, read `data/data_link.txt`. If want to use another directory, change `config/config.json` accordingly.  
+## **Quick Start (PyTorch Version - Recommended)**
+- Download CelebA dataset and place it in `celeba-dataset/` folder
+- Train model with unified configuration: `uv run train_VAE_unified.py --loss mse_l1 --training standard_training --model medium --dataset full`
+- Generate attribute embeddings: `uv run extract_vector_from_label_pytorch.py`
+- Open interactive GUI: `uv run gui_pytorch.py`
+
+## **Legacy TensorFlow Version**
+- Download Celeba dataset and place it in data folder, read `data/data_link.txt`. If want to use another directory, change `config/config.json` accordingly.  
 - If desired, you can change parameters such as resolution, embedding size, weight of reconstruction loss compared to KL divergence loss, etc., in `config/config.json`.
 - Train model with `python train_VAE.py`
 - Obtain face attributes for latent space arithmetic with `extract_vector_from_label.py`
-- Open interactive GUI for controllable face generation with `streamlit run gui.py `
+- Open interactive GUI for controllable face generation with `streamlit run gui.py`
+
+## **Testing and Development**
+- All test, demo, and debug scripts are organized in the `test/` directory
+- See `test/README.md` for detailed information about available scripts
+- Run tests: `uv run test/test_unified_config.py` or `uv run test/demo_dataset_subsets.py`
 
 # Demo
 
