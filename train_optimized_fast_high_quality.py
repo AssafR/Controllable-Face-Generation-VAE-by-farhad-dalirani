@@ -58,6 +58,9 @@ def train_optimized_fast_high_quality():
         dataset_preset="full"
     )
     
+    # Set a clean, simple config name for filenames
+    config['config_name'] = "fast_high_quality"
+    
     print(f"✅ Configuration loaded:")
     print(f"  • Input size: {config['input_img_size']}x{config['input_img_size']}")
     print(f"  • Embedding size: {config['embedding_size']}")
@@ -282,6 +285,10 @@ def train_optimized_fast_high_quality():
         if (epoch + 1) % 25 == 0:
             print(f"  🖼️  Generating sample images...")
             
+            # Create sample_images directory
+            sample_dir = "sample_images"
+            os.makedirs(sample_dir, exist_ok=True)
+            
             with torch.no_grad():
                 # Generate random images
                 z = torch.randn(8, config['embedding_size']).to(device)
@@ -292,15 +299,36 @@ def train_optimized_fast_high_quality():
                 if writer is not None:
                     writer.add_images('Generated/Images', generated, epoch)
                 
+                # Get clean config name for filename
+                config_name = config.get('config_name', 'fast_high_quality')
+                
                 # Save sample images
-                sample_path = f"optimized_fast_high_quality_samples_epoch_{epoch+1}.png"
-                titles = [f"Sample {i+1}" for i in range(8)]
+                sample_path = os.path.join(sample_dir, f"{config_name}_generated_epoch_{epoch+1:03d}.png")
+                titles = [f"Epoch {epoch+1} - Sample {i+1}" for i in range(8)]
                 display_image_grid(generated_np, 
                                   titles=titles,
                                   max_cols=4, 
                                   figsize=(16, 8),
                                   save_path=sample_path)
                 print(f"  ✅ Sample images saved: {sample_path}")
+                
+                # Also generate reconstruction samples
+                val_indices = torch.randperm(len(val_data))[:4]
+                val_images = torch.stack([val_data[i] for i in val_indices]).to(device)
+                z_mean, z_log_var, z = model.enc(val_images)
+                reconstructed = model.dec(z)
+                
+                val_np = val_images.permute(0, 2, 3, 1).cpu().numpy()
+                recon_np = reconstructed.permute(0, 2, 3, 1).cpu().numpy()
+                
+                recon_path = os.path.join(sample_dir, f"{config_name}_reconstruction_epoch_{epoch+1:03d}.png")
+                from utilities_pytorch import display_comparison_grid
+                display_comparison_grid(val_np, recon_np,
+                                       titles=[f"Epoch {epoch+1} - Pair {i+1}" for i in range(4)],
+                                       max_cols=2, 
+                                       figsize=(12, 8),
+                                       save_path=recon_path)
+                print(f"  ✅ Reconstruction samples saved: {recon_path}")
         
         # Early stopping
         if patience_counter >= early_stopping_patience:
@@ -334,7 +362,8 @@ def train_optimized_fast_high_quality():
         generated_np = generated.permute(0, 2, 3, 1).cpu().numpy()
         
         # Save final samples
-        final_path = "optimized_fast_high_quality_final_samples.png"
+        config_name = config.get('config_name', 'fast_high_quality')
+        final_path = f"{config_name}_final_samples.png"
         titles = [f"Final {i+1}" for i in range(16)]
         display_image_grid(generated_np, 
                           titles=titles,
