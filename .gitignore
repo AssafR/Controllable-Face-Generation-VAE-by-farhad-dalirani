@@ -27,4 +27,4 @@ model_weights/va*
 model_weights/checkpoint/checkpoint.keras
 attributes_embedings/attributes_embedings.json
 uv.lock
-.python.version
+.python-version
