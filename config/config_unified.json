@@ -165,6 +165,30 @@
             "max_epoch": 200,
             "batch_size": 64,
             "lr": 0.00005
+        },
+        
+        "fast_high_quality_training": {
+            "_description": "Fast high quality training - 100 epochs, optimized batch size, moderate LR",
+            "_use_case": "High quality with optimal training speed on RTX 3090",
+            "max_epoch": 100,
+            "batch_size": 512,
+            "lr": 0.0001
+        },
+        
+        "balanced_high_quality_training": {
+            "_description": "Balanced high quality training - 150 epochs, balanced settings",
+            "_use_case": "Good quality-speed balance",
+            "max_epoch": 150,
+            "batch_size": 96,
+            "lr": 0.000075
+        },
+        
+        "compact_high_quality_training": {
+            "_description": "Compact high quality training - 80 epochs, large batch, higher LR",
+            "_use_case": "Fast training with good quality",
+            "max_epoch": 80,
+            "batch_size": 256,
+            "lr": 0.0002
         }
     },
     
@@ -209,6 +233,30 @@
             "embedding_size": 1024,
             "num_channels": 256,
             "input_img_size": 256
+        },
+        
+        "fast_high_quality": {
+            "_description": "Fast high quality model - 128x128 images, balanced parameters",
+            "_use_case": "High quality with reasonable training time, production use",
+            "embedding_size": 512,
+            "num_channels": 128,
+            "input_img_size": 128
+        },
+        
+        "balanced_high_quality": {
+            "_description": "Balanced high quality model - 128x128 images, larger latent space",
+            "_use_case": "Good quality-speed balance, most users",
+            "embedding_size": 768,
+            "num_channels": 160,
+            "input_img_size": 128
+        },
+        
+        "compact_high_quality": {
+            "_description": "Compact high quality model - 64x64 images, large latent space",
+            "_use_case": "Fast training, good quality, limited resources",
+            "embedding_size": 1024,
+            "num_channels": 192,
+            "input_img_size": 64
         }
     },
     
