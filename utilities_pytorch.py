@@ -184,7 +184,7 @@ def display_image_grid(images, titles=None, max_cols=4, figsize=(12, 8), save_pa
             plt.savefig(save_path, dpi=150, bbox_inches='tight')
             print(f"Images saved to: {save_path}")
         
-        plt.show()
+        plt.close()  # Close the figure to prevent crashes
     
     else:
         # Use slider for large collections
@@ -275,7 +275,10 @@ def display_image_grid_with_slider(images, titles=None, max_cols=4, figsize=(12,
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
         print(f"Images saved to: {save_path}")
     
-    plt.show()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"Images saved to: {save_path}")
+    plt.close()  # Close the figure to prevent crashes
 
 def display_comparison_grid(original_images, generated_images, titles=None, max_cols=4, figsize=(15, 10), save_path=None):
     """
@@ -363,7 +366,10 @@ def display_comparison_grid(original_images, generated_images, titles=None, max_
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
         print(f"Comparison grid saved to: {save_path}")
     
-    plt.show()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"Images saved to: {save_path}")
+    plt.close()  # Close the figure to prevent crashes
 
 def create_image_montage(images, titles=None, max_images=20, figsize=(15, 10), save_path=None):
     """
@@ -440,4 +446,7 @@ def create_image_montage(images, titles=None, max_images=20, figsize=(15, 10), s
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
         print(f"Montage saved to: {save_path}")
     
-    plt.show()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"Images saved to: {save_path}")
+    plt.close()  # Close the figure to prevent crashes

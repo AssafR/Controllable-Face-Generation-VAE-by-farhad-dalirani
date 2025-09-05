@@ -11,10 +11,14 @@ Uses optimal batch size 512 for RTX 3090:
 
 import sys
 import os
+import warnings
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
+
+# No need for warning suppression - using modern PyTorch API
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_AVAILABLE = True
@@ -60,6 +64,13 @@ def train_optimized_fast_high_quality():
     
     # Set a clean, simple config name for filenames
     config['config_name'] = "fast_high_quality"
+    
+    # Optimize batch size for perceptual loss - we have room for more
+    if config.get('loss_config', {}).get('use_perceptual_loss', False):
+        original_batch_size = config['batch_size']
+        config['batch_size'] = min(config['batch_size'], 256)  # Optimized for available VRAM
+        if config['batch_size'] != original_batch_size:
+            print(f"⚡  Optimized batch size from {original_batch_size} to {config['batch_size']} for perceptual loss")
     
     print(f"✅ Configuration loaded:")
     print(f"  • Input size: {config['input_img_size']}x{config['input_img_size']}")
@@ -124,15 +135,42 @@ def train_optimized_fast_high_quality():
     print(f"  • Scheduler: ReduceLROnPlateau (patience=8)")
     print(f"  • Batch size: {config['batch_size']} (optimized for RTX 3090)")
     
-    # Training loop
-    print(f"\n🎯 Starting training...")
+    # Checkpoint setup
+    checkpoint_dir = "checkpoints"
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    checkpoint_path = os.path.join(checkpoint_dir, "training_checkpoint.pth")
+    best_model_path = f"{config['model_save_path']}/vae_optimized_fast_high_quality.pth"
+    
+    # Training variables
     best_val_loss = float('inf')
     patience_counter = 0
     early_stopping_patience = 12  # Reduced for faster training
+    start_epoch = 0
     
+    # Try to resume from checkpoint
+    if os.path.exists(checkpoint_path):
+        print(f"🔄 Found checkpoint: {checkpoint_path}")
+        print("   Resuming training from checkpoint...")
+        
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        best_val_loss = checkpoint['best_val_loss']
+        patience_counter = checkpoint.get('patience_counter', 0)
+        
+        print(f"   ✅ Resumed from epoch {start_epoch}")
+        print(f"   📊 Best validation loss: {best_val_loss:.6f}")
+        print(f"   ⏳ Patience counter: {patience_counter}")
+    else:
+        print("🆕 No checkpoint found, starting fresh training")
+    
+    # Training loop
+    print(f"\n🎯 Starting training...")
     start_time = time.time()
     
-    for epoch in range(config['max_epoch']):
+    for epoch in range(start_epoch, config['max_epoch']):
         # Training phase
         model.train()
         train_loss = 0.0
@@ -151,8 +189,66 @@ def train_optimized_fast_high_quality():
             # Forward pass
             emb_mean, emb_log_var, reconst = model(images)
             
-            # Calculate reconstruction loss
-            recon_loss = model.reconstruction_loss(images, reconst)
+            # Calculate reconstruction loss components
+            mse_loss = F.mse_loss(reconst, images)
+            l1_loss = F.l1_loss(reconst, images)
+            
+            # Calculate perceptual loss if enabled - using VAE encoder features
+            perceptual_loss = 0.0
+            loss_config = config.get('loss_config', {})
+            if loss_config.get('use_perceptual_loss', False):
+                try:
+                    # Extract features from VAE encoder intermediate layers (optimized)
+                    def extract_encoder_features(x):
+                        features = []
+                        x = model.enc.conv1(x)  # First conv layer
+                        x = model.enc.bn1(x)
+                        x = F.leaky_relu(x, 0.2)
+                        features.append(x)  # After first conv block
+                        
+                        # Skip middle layer to save memory
+                        x = model.enc.conv2(x)  # Second conv layer
+                        x = model.enc.bn2(x)
+                        x = F.leaky_relu(x, 0.2)
+                        # Don't store this feature to save memory
+                        
+                        x = model.enc.conv3(x)  # Third conv layer
+                        x = model.enc.bn3(x)
+                        x = F.leaky_relu(x, 0.2)
+                        features.append(x)  # After third conv block
+                        
+                        return features
+                    
+                    # Get encoder features for both images
+                    orig_features = extract_encoder_features(images)
+                    recon_features = extract_encoder_features(reconst)
+                    
+                    # Calculate perceptual loss as MSE of encoder features
+                    perceptual_loss = 0.0
+                    for orig_feat, recon_feat in zip(orig_features, recon_features):
+                        perceptual_loss += F.mse_loss(orig_feat, recon_feat)
+                    perceptual_loss /= len(orig_features)
+                    
+                except Exception as e:
+                    print(f"⚠️  Error calculating perceptual loss: {e}")
+                    perceptual_loss = 0.0
+            
+            # Combine losses with weights
+            mse_weight = loss_config.get('mse_weight', 0.5)
+            l1_weight = loss_config.get('l1_weight', 0.3)
+            perceptual_weight = loss_config.get('perceptual_weight', 0.2)
+            
+            recon_loss = (mse_weight * mse_loss + 
+                         l1_weight * l1_loss + 
+                         perceptual_weight * perceptual_loss)
+            
+            # Store loss components for logging
+            model.loss_components = {
+                'mse': mse_loss.item(),
+                'l1': l1_loss.item(),
+                'perceptual': perceptual_loss.item() if isinstance(perceptual_loss, torch.Tensor) else perceptual_loss,
+                'total': recon_loss.item()
+            }
             
             # Calculate KL divergence loss
             kl_loss = model.kl_loss(emb_mean, emb_log_var)
@@ -182,9 +278,11 @@ def train_optimized_fast_high_quality():
             
             # Update progress bar
             train_pbar.set_postfix({
-                'Loss': f'{total_loss.item():.6f}',
-                'MSE': f'{loss_dict.get("mse", 0):.6f}',
-                'KL': f'{loss_dict.get("kl", 0):.6f}'
+                'Loss': f'{total_loss.item():.5f}',
+                'MSE': f'{loss_dict.get("mse", 0):.4f}',
+                'L1': f'{loss_dict.get("l1", 0):.4f}',
+                'Perceptual': f'{loss_dict.get("perceptual", 0):.4f}',
+                'KL': f'{loss_dict.get("kl", 0):.4f}'
             })
         
         # Validation phase
@@ -204,8 +302,65 @@ def train_optimized_fast_high_quality():
                 # Forward pass
                 emb_mean, emb_log_var, reconst = model(images)
                 
-                # Calculate reconstruction loss
-                recon_loss = model.reconstruction_loss(images, reconst)
+                # Calculate reconstruction loss components
+                mse_loss = F.mse_loss(reconst, images)
+                l1_loss = F.l1_loss(reconst, images)
+                
+                # Calculate perceptual loss if enabled - using VAE encoder features
+                perceptual_loss = 0.0
+                loss_config = config.get('loss_config', {})
+                if loss_config.get('use_perceptual_loss', False):
+                    try:
+                        # Extract features from VAE encoder intermediate layers (optimized)
+                        def extract_encoder_features(x):
+                            features = []
+                            x = model.enc.conv1(x)  # First conv layer
+                            x = model.enc.bn1(x)
+                            x = F.leaky_relu(x, 0.2)
+                            features.append(x)  # After first conv block
+                            
+                            # Skip middle layer to save memory
+                            x = model.enc.conv2(x)  # Second conv layer
+                            x = model.enc.bn2(x)
+                            x = F.leaky_relu(x, 0.2)
+                            # Don't store this feature to save memory
+                            
+                            x = model.enc.conv3(x)  # Third conv layer
+                            x = model.enc.bn3(x)
+                            x = F.leaky_relu(x, 0.2)
+                            features.append(x)  # After third conv block
+                            
+                            return features
+                        
+                        # Get encoder features for both images
+                        orig_features = extract_encoder_features(images)
+                        recon_features = extract_encoder_features(reconst)
+                        
+                        # Calculate perceptual loss as MSE of encoder features
+                        perceptual_loss = 0.0
+                        for orig_feat, recon_feat in zip(orig_features, recon_features):
+                            perceptual_loss += F.mse_loss(orig_feat, recon_feat)
+                        perceptual_loss /= len(orig_features)
+                        
+                    except Exception as e:
+                        perceptual_loss = 0.0
+                
+                # Combine losses with weights
+                mse_weight = loss_config.get('mse_weight', 0.5)
+                l1_weight = loss_config.get('l1_weight', 0.3)
+                perceptual_weight = loss_config.get('perceptual_weight', 0.2)
+                
+                recon_loss = (mse_weight * mse_loss + 
+                             l1_weight * l1_loss + 
+                             perceptual_weight * perceptual_loss)
+                
+                # Store loss components for logging
+                loss_dict = {
+                    'mse': mse_loss.item(),
+                    'l1': l1_loss.item(),
+                    'perceptual': perceptual_loss.item() if isinstance(perceptual_loss, torch.Tensor) else perceptual_loss,
+                    'total': recon_loss.item()
+                }
                 
                 # Calculate KL divergence loss
                 kl_loss = model.kl_loss(emb_mean, emb_log_var)
@@ -213,8 +368,7 @@ def train_optimized_fast_high_quality():
                 # Total loss
                 total_loss = recon_loss + config['beta'] * kl_loss
                 
-                # Get loss components from model
-                loss_dict = getattr(model, 'loss_components', {})
+                # Add KL loss to loss dictionary
                 loss_dict['kl'] = kl_loss.item()
                 loss_dict['total'] = total_loss.item()
                 
@@ -227,6 +381,8 @@ def train_optimized_fast_high_quality():
                 val_pbar.set_postfix({
                     'Loss': f'{total_loss.item():.6f}',
                     'MSE': f'{loss_dict.get("mse", 0):.6f}',
+                    'L1': f'{loss_dict.get("l1", 0):.6f}',
+                    'Perceptual': f'{loss_dict.get("perceptual", 0):.6f}',
                     'KL': f'{loss_dict.get("kl", 0):.6f}'
                 })
         
@@ -282,14 +438,31 @@ def train_optimized_fast_high_quality():
             best_val_loss = val_loss
             patience_counter = 0
             
-            # Save model
-            model_path = f"{config['model_save_path']}/vae_optimized_fast_high_quality.pth"
+            # Save best model
             os.makedirs(config['model_save_path'], exist_ok=True)
-            torch.save(model.state_dict(), model_path)
-            print(f"  ✅ New best model saved: {model_path}")
+            torch.save(model.state_dict(), best_model_path)
+            print(f"  ✅ New best model saved: {best_model_path}")
         else:
             patience_counter += 1
             print(f"  ⏳ No improvement ({patience_counter}/{early_stopping_patience})")
+        
+        # Save checkpoint every epoch (complete state)
+        checkpoint = {
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'best_val_loss': best_val_loss,
+            'patience_counter': patience_counter,
+            'config': config
+        }
+        torch.save(checkpoint, checkpoint_path)
+        
+        # Save periodic checkpoint every 10 epochs
+        if (epoch + 1) % 10 == 0:
+            periodic_checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_epoch_{epoch+1:03d}.pth")
+            torch.save(checkpoint, periodic_checkpoint_path)
+            print(f"  💾 Periodic checkpoint saved: {periodic_checkpoint_path}")
         
         # Generate sample images for first 5 epochs, then every 5 epochs
         if (epoch + 1) <= 5 or (epoch + 1) % 5 == 0:
@@ -384,7 +557,24 @@ def train_optimized_fast_high_quality():
     
     if writer is not None:
         writer.close()
+    
+    # Final cleanup - save final checkpoint
+    final_checkpoint = {
+        'epoch': config['max_epoch'] - 1,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'scheduler_state_dict': scheduler.state_dict(),
+        'best_val_loss': best_val_loss,
+        'patience_counter': patience_counter,
+        'config': config,
+        'training_complete': True
+    }
+    torch.save(final_checkpoint, checkpoint_path)
+    
     print(f"\n✅ Optimized fast high quality training complete!")
+    print(f"📁 Checkpoints saved in: {checkpoint_dir}/")
+    print(f"🏆 Best model: {best_model_path}")
+    print(f"💾 Latest checkpoint: {checkpoint_path}")
 
 if __name__ == "__main__":
     train_optimized_fast_high_quality()
