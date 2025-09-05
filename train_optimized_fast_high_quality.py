@@ -261,11 +261,21 @@ def train_optimized_fast_high_quality():
             writer.add_scalar('Perceptual/Val', val_perceptual, epoch)
             writer.add_scalar('Learning_Rate', current_lr, epoch)
         
+        # Get GPU statistics
+        if torch.cuda.is_available():
+            gpu_memory_allocated = torch.cuda.memory_allocated(device) / 1024**3  # GB
+            gpu_memory_reserved = torch.cuda.memory_reserved(device) / 1024**3   # GB
+            gpu_memory_total = torch.cuda.get_device_properties(device).total_memory / 1024**3  # GB
+            gpu_utilization = (gpu_memory_allocated / gpu_memory_total) * 100
+        else:
+            gpu_memory_allocated = gpu_memory_reserved = gpu_memory_total = gpu_utilization = 0
+        
         # Print epoch summary
         print(f"\nEpoch {epoch+1}/{config['max_epoch']} Summary:")
         print(f"  Train Loss: {train_loss:.6f} (MSE: {train_mse:.6f}, KL: {train_kl:.6f}, L1: {train_l1:.6f}, Perceptual: {train_perceptual:.6f})")
         print(f"  Val Loss:   {val_loss:.6f} (MSE: {val_mse:.6f}, KL: {val_kl:.6f}, L1: {val_l1:.6f}, Perceptual: {val_perceptual:.6f})")
         print(f"  Learning Rate: {current_lr:.2e}")
+        print(f"  GPU Memory: {gpu_memory_allocated:.2f}GB / {gpu_memory_total:.1f}GB ({gpu_utilization:.1f}%)")
         
         # Save best model
         if val_loss < best_val_loss:
@@ -281,8 +291,8 @@ def train_optimized_fast_high_quality():
             patience_counter += 1
             print(f"  ⏳ No improvement ({patience_counter}/{early_stopping_patience})")
         
-        # Generate sample images every 25 epochs
-        if (epoch + 1) % 25 == 0:
+        # Generate sample images for first 5 epochs, then every 5 epochs
+        if (epoch + 1) <= 5 or (epoch + 1) % 5 == 0:
             print(f"  🖼️  Generating sample images...")
             
             # Create sample_images directory
