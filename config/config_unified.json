@@ -106,6 +106,21 @@
             "l1_weight": 0.3,
             "perceptual_weight": 0.2,
             "lpips_weight": 0.0
+        },
+        
+        "ultra_high_quality_loss": {
+            "_description": "Ultra high quality loss - best possible perceptual quality",
+            "_use_case": "Research, best possible quality, production",
+            "_pros": "Best perceptual quality, realistic textures, sharp details",
+            "_cons": "Slowest training, highest memory usage",
+            "use_mse": true,
+            "use_l1": true,
+            "use_perceptual_loss": true,
+            "use_lpips": true,
+            "mse_weight": 0.4,
+            "l1_weight": 0.2,
+            "perceptual_weight": 0.2,
+            "lpips_weight": 0.2
         }
     },
     
@@ -142,6 +157,14 @@
             "max_epoch": 100,
             "batch_size": 128,
             "lr": 0.0001
+        },
+        
+        "ultra_high_quality_training": {
+            "_description": "Ultra high quality training - 200 epochs, small batch, low LR",
+            "_use_case": "Best possible quality, research, production",
+            "max_epoch": 200,
+            "batch_size": 64,
+            "lr": 0.00005
         }
     },
     
@@ -178,6 +201,14 @@
             "embedding_size": 512,
             "num_channels": 128,
             "input_img_size": 128
+        },
+        
+        "ultra_high_quality": {
+            "_description": "Ultra high quality model - 256x256 images, large latent space, extended training",
+            "_use_case": "Best possible quality, research, production",
+            "embedding_size": 1024,
+            "num_channels": 256,
+            "input_img_size": 256
         }
     },
     
