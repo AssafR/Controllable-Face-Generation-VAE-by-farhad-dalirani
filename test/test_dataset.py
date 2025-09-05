@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from utilities_pytorch import get_split_data
+from utilities_pytorch import get_split_data, display_image_grid, create_image_montage
 import json
 import os
 
@@ -28,7 +28,10 @@ print(f"Validation samples: {len(validation)}")
 
 # Test a few samples
 print("\n=== Testing Dataset Samples ===")
-for i in range(5):
+sample_images = []
+sample_titles = []
+
+for i in range(min(20, len(train))):
     sample = train[i]
     print(f"Sample {i}:")
     print(f"  Type: {type(sample)}")
@@ -46,18 +49,18 @@ for i in range(5):
         img_np = sample.numpy()
         if img_np.shape[0] == 3:  # NCHW format
             img_np = img_np.transpose(1, 2, 0)  # Convert to NHWC
-    
-    # Display the image
-    plt.figure(figsize=(10, 2))
-    plt.subplot(1, 5, i+1)
-    plt.imshow(img_np)
-    plt.title(f'Sample {i}\nRange: {sample.min().item():.3f}-{sample.max().item():.3f}')
-    plt.axis('off')
+        
+        sample_images.append(img_np)
+        sample_titles.append(f'Sample {i}\nRange: {sample.min().item():.3f}-{sample.max().item():.3f}')
 
-plt.tight_layout()
-plt.savefig('dataset_samples.png')
+# Display all samples in a grid with slider if needed
+display_image_grid(sample_images, 
+                  titles=sample_titles,
+                  max_cols=5, 
+                  figsize=(15, 8),
+                  save_path="dataset_samples.png")
+
 print("\nDataset samples saved to dataset_samples.png")
-plt.show()
 
 # Test with different normalization
 print("\n=== Testing Different Normalization ===")

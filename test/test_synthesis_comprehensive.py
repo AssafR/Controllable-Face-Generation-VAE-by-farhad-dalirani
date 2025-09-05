@@ -13,7 +13,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from variation_autoencoder_pytorch import VAE_pt
-from utilities_pytorch import get_split_data, configure_gpu
+from utilities_pytorch import get_split_data, configure_gpu, display_image_grid, display_comparison_grid, create_image_montage
 import json
 import os
 
@@ -78,6 +78,14 @@ def test_random_generation(model, config, device, num_images=5):
         print(f"✅ Black images: {black_images.sum()}/{num_images}")
         print(f"✅ White images: {white_images.sum()}/{num_images}")
         
+        # Display generated images interactively
+        print("\n🔍 Displaying Generated Images:")
+        titles = [f"Generated {i+1}" for i in range(generated_np.shape[0])]
+        display_image_grid(generated_np, 
+                          titles=titles,
+                          max_cols=5, 
+                          figsize=(15, 6))
+        
         return generated_np
 
 def test_reconstruction(model, config, device, num_images=5):
@@ -122,6 +130,13 @@ def test_reconstruction(model, config, device, num_images=5):
         # Calculate reconstruction error
         mse = np.mean((real_np - recon_np) ** 2)
         print(f"✅ Reconstruction MSE: {mse:.6f}")
+        
+        # Display reconstruction comparison interactively
+        print("\n🔍 Displaying Reconstruction Results:")
+        display_comparison_grid(real_np, recon_np,
+                               titles=[f"Pair {i+1}" for i in range(real_np.shape[0])],
+                               max_cols=3, 
+                               figsize=(15, 8))
         
         return real_np, recon_np
 
@@ -178,72 +193,52 @@ def test_morphing(model, config, device):
         return morphed_images
 
 def save_test_results(generated, real, recon, base, modified, morphed):
-    """Save test results as images."""
+    """Save test results as images using improved display functions."""
     print(f"\n=== Saving Test Results ===")
     
     os.makedirs("test_results", exist_ok=True)
     
     # Save random generation
     if generated is not None:
-        fig, axes = plt.subplots(1, min(5, generated.shape[0]), figsize=(15, 3))
-        if generated.shape[0] == 1:
-            axes = [axes]
-        for i in range(min(5, generated.shape[0])):
-            axes[i].imshow(np.clip(generated[i], 0, 1))
-            axes[i].set_title(f"Generated {i+1}")
-            axes[i].axis('off')
-        plt.tight_layout()
-        plt.savefig("test_results/random_generation.png", dpi=150, bbox_inches='tight')
-        plt.close()
+        titles = [f"Generated {i+1}" for i in range(generated.shape[0])]
+        display_image_grid(generated, 
+                          titles=titles,
+                          max_cols=5, 
+                          figsize=(15, 6),
+                          save_path="test_results/random_generation.png")
         print("✅ Saved random generation results")
     
     # Save reconstruction comparison
     if real is not None and recon is not None:
-        fig, axes = plt.subplots(2, min(3, real.shape[0]), figsize=(12, 8))
-        if real.shape[0] == 1:
-            axes = axes.reshape(2, 1)
-        for i in range(min(3, real.shape[0])):
-            axes[0, i].imshow(np.clip(real[i], 0, 1))
-            axes[0, i].set_title(f"Original {i+1}")
-            axes[0, i].axis('off')
-            axes[1, i].imshow(np.clip(recon[i], 0, 1))
-            axes[1, i].set_title(f"Reconstructed {i+1}")
-            axes[1, i].axis('off')
-        plt.tight_layout()
-        plt.savefig("test_results/reconstruction_comparison.png", dpi=150, bbox_inches='tight')
-        plt.close()
+        display_comparison_grid(real, recon,
+                               titles=[f"Pair {i+1}" for i in range(real.shape[0])],
+                               max_cols=3, 
+                               figsize=(15, 8))
         print("✅ Saved reconstruction comparison")
     
     # Save latent arithmetic
     if base is not None and modified is not None:
-        fig, axes = plt.subplots(2, min(3, base.shape[0]), figsize=(12, 8))
-        if base.shape[0] == 1:
-            axes = axes.reshape(2, 1)
-        for i in range(min(3, base.shape[0])):
-            axes[0, i].imshow(np.clip(base[i], 0, 1))
-            axes[0, i].set_title(f"Base {i+1}")
-            axes[0, i].axis('off')
-            axes[1, i].imshow(np.clip(modified[i], 0, 1))
-            axes[1, i].set_title(f"Modified {i+1}")
-            axes[1, i].axis('off')
-        plt.tight_layout()
-        plt.savefig("test_results/latent_arithmetic.png", dpi=150, bbox_inches='tight')
-        plt.close()
+        display_comparison_grid(base, modified,
+                               titles=[f"Pair {i+1}" for i in range(base.shape[0])],
+                               max_cols=3, 
+                               figsize=(15, 8))
         print("✅ Saved latent arithmetic results")
     
     # Save morphing
     if morphed is not None and len(morphed) > 0:
-        fig, axes = plt.subplots(len(morphed), min(2, morphed[0].shape[0]), figsize=(8, 4*len(morphed)))
-        if len(morphed) == 1:
-            axes = axes.reshape(1, -1)
+        # Flatten all morphing levels into one array
+        all_morphed = []
+        morph_titles = []
         for i, morph_level in enumerate(morphed):
-            for j in range(min(2, morph_level.shape[0])):
-                axes[i, j].imshow(np.clip(morph_level[j], 0, 1))
-                axes[i, j].set_title(f"Morph α={[0.0, 0.5, 1.0][i]} {j+1}")
-                axes[i, j].axis('off')
-        plt.tight_layout()
-        plt.savefig("test_results/morphing.png", dpi=150, bbox_inches='tight')
-        plt.close()
+            for j in range(morph_level.shape[0]):
+                all_morphed.append(morph_level[j])
+                morph_titles.append(f"Morph α={[0.0, 0.5, 1.0][i]} {j+1}")
+        
+        display_image_grid(all_morphed, 
+                          titles=morph_titles,
+                          max_cols=6, 
+                          figsize=(18, 10),
+                          save_path="test_results/morphing.png")
         print("✅ Saved morphing results")
 
 def main():

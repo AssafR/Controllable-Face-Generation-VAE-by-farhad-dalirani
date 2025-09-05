@@ -19,11 +19,12 @@ class Sampler(nn.Module):
 class Encoder_pt(nn.Module):
     """Improved Encoder with better architecture"""
     
-    def __init__(self, embedding_size=512, num_channels=128):  # Increased embedding size
+    def __init__(self, embedding_size=512, num_channels=128, input_size=64):  # Added input_size parameter
         super(Encoder_pt, self).__init__()
         
         # Embedding size
         self.embedding_size = embedding_size
+        self.input_size = input_size
 
         # Improved convolutional layers with residual connections
         self.conv1 = nn.Conv2d(3, num_channels, kernel_size=4, stride=2, padding=1)
@@ -40,15 +41,19 @@ class Encoder_pt(nn.Module):
 
         self.activation = nn.LeakyReLU(0.2)
         
+        # Calculate the spatial dimensions after convolutions
+        # After 4 stride-2 convs: input_size -> input_size/2 -> input_size/4 -> input_size/8 -> input_size/16
+        spatial_size = input_size // 16
+        self.spatial_size = spatial_size
+        
         # Layers to calculate mean and log of variance for each input
-        # 4x4 after 4 stride-2 convs, with 8*num_channels channels
-        self.dense_mean = nn.Linear(num_channels * 8 * 4 * 4, self.embedding_size)
-        self.dense_log_var = nn.Linear(num_channels * 8 * 4 * 4, self.embedding_size)
+        self.dense_mean = nn.Linear(num_channels * 8 * spatial_size * spatial_size, self.embedding_size)
+        self.dense_log_var = nn.Linear(num_channels * 8 * spatial_size * spatial_size, self.embedding_size)
         
         self.sampler = Sampler()
         
         # Store shape for decoder
-        self.shape_before_flattening = (num_channels * 8, 4, 4)
+        self.shape_before_flattening = (num_channels * 8, spatial_size, spatial_size)
 
     def forward(self, inputs):
         """One forward pass for given inputs"""
@@ -87,8 +92,12 @@ class Decoder_pt(nn.Module):
         self.shape_before_flattening = shape_before_flattening
         
         # Dense layer to expand from latent space
-        self.dense1 = nn.Linear(embedding_size, num_channels * 8 * 4 * 4)  # Use actual embedding size
-        self.bn_dense = nn.BatchNorm1d(num_channels * 8 * 4 * 4)
+        # Calculate the total size from shape_before_flattening
+        total_size = 1
+        for dim in shape_before_flattening:
+            total_size *= dim
+        self.dense1 = nn.Linear(embedding_size, total_size)
+        self.bn_dense = nn.BatchNorm1d(total_size)
         self.activation = nn.LeakyReLU(0.2)
         
         # Transpose convolutional layers for upsampling
@@ -156,7 +165,8 @@ class VAE_pt(nn.Module):
         self.lpips_weight = self.loss_config.get('lpips_weight', 0.1)
 
         # Create encoder and decoder
-        self.enc = Encoder_pt(embedding_size=self.embedding_size, num_channels=self.num_channels)
+        self.enc = Encoder_pt(embedding_size=self.embedding_size, num_channels=self.num_channels, 
+                             input_size=self.input_img_size)
         self.dec = Decoder_pt(shape_before_flattening=self.enc.shape_before_flattening, 
                              num_channels=self.num_channels, embedding_size=self.embedding_size)
 
