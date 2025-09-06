@@ -18,6 +18,14 @@ from datetime import datetime
 import time
 import json
 
+# Try to import torchvision for VGG perceptual loss
+try:
+    import torchvision.models as models
+    import torchvision.transforms as transforms
+    TORCHVISION_AVAILABLE = True
+except ImportError:
+    TORCHVISION_AVAILABLE = False
+
 # TensorBoard support
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -35,6 +43,57 @@ from variation_autoencoder_improved import VAE_pt
 from utilities_pytorch import get_split_data, configure_gpu, display_image_grid, display_comparison_grid
 from config_loader import ConfigLoader
 
+class VGGPerceptualLoss(nn.Module):
+    """VGG-based perceptual loss for better texture and detail preservation."""
+    
+    def __init__(self, device='cuda'):
+        super().__init__()
+        if not TORCHVISION_AVAILABLE:
+            raise ImportError("torchvision is required for VGG perceptual loss")
+        
+        # Load pre-trained VGG19
+        vgg = models.vgg19(pretrained=True).features
+        self.vgg = vgg.to(device)
+        
+        # Freeze VGG parameters
+        for param in self.vgg.parameters():
+            param.requires_grad = False
+        
+        # Define feature extraction layers
+        self.feature_layers = [1, 6, 11, 20, 29]  # conv1_2, conv2_2, conv3_4, conv4_4, conv5_4
+        
+        # Normalize images to VGG input range
+        self.normalize = transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+    
+    def forward(self, x, y):
+        """Calculate perceptual loss between x and y."""
+        # Normalize to VGG input range
+        x_norm = self.normalize(x)
+        y_norm = self.normalize(y)
+        
+        # Extract features
+        x_features = self._extract_features(x_norm)
+        y_features = self._extract_features(y_norm)
+        
+        # Calculate L1 loss for each feature layer
+        loss = 0.0
+        for x_feat, y_feat in zip(x_features, y_features):
+            loss += F.l1_loss(x_feat, y_feat)
+        
+        return loss / len(x_features)
+    
+    def _extract_features(self, x):
+        """Extract features from VGG layers."""
+        features = []
+        for i, layer in enumerate(self.vgg):
+            x = layer(x)
+            if i in self.feature_layers:
+                features.append(x)
+        return features
+
 class UnifiedVAETrainer:
     """Unified VAE trainer that supports all training configurations."""
     
@@ -49,6 +108,71 @@ class UnifiedVAETrainer:
         self.best_val_loss = float('inf')
         self.patience_counter = 0
         
+        # Initialize perceptual loss and adjust batch size
+        self.perceptual_loss_fn = None
+        self.original_batch_size = config['batch_size']
+        loss_config = config.get('loss_config', {})
+        if loss_config.get('use_perceptual_loss', False):
+            try:
+                if TORCHVISION_AVAILABLE:
+                    self.perceptual_loss_fn = VGGPerceptualLoss(device)
+                    # VGG uses significant memory, reduce batch size intelligently
+                    self._adjust_batch_size_for_vgg(config, device)
+                    print(f"  ✅ Using VGG-based perceptual loss")
+                    print(f"  ⚡ Adjusted batch size from {self.original_batch_size} to {config['batch_size']} for VGG memory requirements")
+                else:
+                    print("  ⚠️  torchvision not available, using high-pass filter perceptual loss")
+            except Exception as e:
+                print(f"  ⚠️  Error initializing VGG perceptual loss: {e}")
+                print("  ⚠️  Falling back to high-pass filter perceptual loss")
+    
+    def _adjust_batch_size_for_vgg(self, config, device):
+        """Intelligently adjust batch size for VGG perceptual loss memory requirements."""
+        if not torch.cuda.is_available():
+            # CPU training - use smaller batch size
+            config['batch_size'] = max(8, config['batch_size'] // 8)
+            return
+        
+        # Get GPU memory info
+        gpu_memory_gb = torch.cuda.get_device_properties(device).total_memory / 1024**3
+        
+        # Estimate VGG memory usage (rough estimates)
+        # VGG19: ~3-5GB for forward pass + features
+        # VAE model: ~1-2GB depending on resolution
+        # Images: batch_size * height * width * 3 * 4 bytes
+        
+        image_memory_per_sample = config['input_img_size'] ** 2 * 3 * 4 / 1024**3  # GB per image
+        
+        # Conservative memory allocation
+        available_memory = gpu_memory_gb * 0.8  # Use 80% of GPU memory
+        vgg_overhead = 4.0  # GB for VGG
+        vae_overhead = 2.0  # GB for VAE model
+        
+        usable_memory = available_memory - vgg_overhead - vae_overhead
+        
+        if usable_memory > 0:
+            max_batch_size = int(usable_memory / image_memory_per_sample)
+            config['batch_size'] = max(8, min(config['batch_size'], max_batch_size))
+        else:
+            # Very limited memory - use minimum batch size
+            config['batch_size'] = 8
+        
+        # Ensure batch size is reasonable
+        config['batch_size'] = max(8, min(config['batch_size'], 64))
+        
+        # Print memory analysis
+        print(f"  📊 Memory Analysis:")
+        print(f"    • GPU Memory: {gpu_memory_gb:.1f}GB total")
+        print(f"    • VGG Overhead: ~4GB")
+        print(f"    • VAE Overhead: ~2GB")
+        print(f"    • Image Memory: {image_memory_per_sample:.3f}GB per sample")
+        print(f"    • Recommended batch size: {config['batch_size']}")
+        
+        if config['batch_size'] < self.original_batch_size:
+            print(f"    ⚠️  Reduced from {self.original_batch_size} due to VGG memory requirements")
+        else:
+            print(f"    ✅ No batch size reduction needed")
+    
     def setup_logging(self):
         """Setup TensorBoard logging."""
         if TENSORBOARD_AVAILABLE:
@@ -127,40 +251,47 @@ class UnifiedVAETrainer:
         return train_loader, val_loader
     
     def calculate_perceptual_loss(self, images, reconst):
-        """Calculate perceptual loss using VAE encoder features."""
+        """Calculate perceptual loss using VGG features or high-pass filter."""
         loss_config = self.config.get('loss_config', {})
         if not loss_config.get('use_perceptual_loss', False):
             return 0.0
             
         try:
-            # Extract features from VAE encoder intermediate layers
-            def extract_encoder_features(x):
-                features = []
-                x = self.model.enc.conv1(x)
-                x = self.model.enc.bn1(x)
-                x = F.leaky_relu(x, 0.2)
-                features.append(x)  # After first conv block
-                
-                x = self.model.enc.conv2(x)
-                x = self.model.enc.bn2(x)
-                x = F.leaky_relu(x, 0.2)
-                
-                x = self.model.enc.conv3(x)
-                x = self.model.enc.bn3(x)
-                x = F.leaky_relu(x, 0.2)
-                features.append(x)  # After third conv block
-                
-                return features
+            # Use VGG perceptual loss if available
+            if self.perceptual_loss_fn is not None:
+                return self.perceptual_loss_fn(images, reconst)
             
-            # Get encoder features for both images
-            orig_features = extract_encoder_features(images)
-            recon_features = extract_encoder_features(reconst)
+            # Fallback to high-pass filter perceptual loss
+            # Convert to grayscale for texture analysis
+            def to_grayscale(x):
+                return 0.299 * x[:, 0:1] + 0.587 * x[:, 1:2] + 0.114 * x[:, 2:3]
             
-            # Calculate perceptual loss as MSE of encoder features
-            perceptual_loss = 0.0
-            for orig_feat, recon_feat in zip(orig_features, recon_features):
-                perceptual_loss += F.mse_loss(orig_feat, recon_feat)
-            perceptual_loss /= len(orig_features)
+            # High-pass filter to emphasize textures and edges
+            def high_pass_filter(x):
+                # Simple 3x3 high-pass kernel
+                kernel = torch.tensor([[-1, -1, -1],
+                                     [-1,  8, -1], 
+                                     [-1, -1, -1]], dtype=torch.float32, device=x.device)
+                kernel = kernel.view(1, 1, 3, 3)
+                
+                # Apply to each channel
+                filtered = []
+                for c in range(x.shape[1]):
+                    channel = x[:, c:c+1]
+                    filtered_channel = F.conv2d(channel, kernel, padding=1)
+                    filtered.append(filtered_channel)
+                
+                return torch.cat(filtered, dim=1)
+            
+            # Convert to grayscale and apply high-pass filter
+            orig_gray = to_grayscale(images)
+            recon_gray = to_grayscale(reconst)
+            
+            orig_filtered = high_pass_filter(orig_gray)
+            recon_filtered = high_pass_filter(recon_gray)
+            
+            # L1 loss on filtered images (captures texture differences)
+            perceptual_loss = F.l1_loss(orig_filtered, recon_filtered)
             
             return perceptual_loss
             
@@ -364,8 +495,8 @@ class UnifiedVAETrainer:
             return False
     
     def clear_old_files(self):
-        """Clear old checkpoints and model files for fresh training."""
-        print("🧹 Clearing old checkpoints and model files for fresh training...")
+        """Clear old training files for fresh training (only PNG files)."""
+        print("🧹 Clearing old training files for fresh training...")
         
         # Check what will be deleted
         files_to_delete = []
@@ -373,42 +504,55 @@ class UnifiedVAETrainer:
         model_dir = self.config['model_save_path']
         sample_dir = "sample_images"
         
+        # Count PNG files only
+        png_count = 0
         if os.path.exists(checkpoint_dir):
-            files_to_delete.append(f"checkpoints/ ({len(os.listdir(checkpoint_dir))} files)")
+            png_files = [f for f in os.listdir(checkpoint_dir) if f.endswith('.png')]
+            png_count += len(png_files)
         if os.path.exists(model_dir):
-            files_to_delete.append(f"model_weights/ ({len(os.listdir(model_dir))} files)")
+            png_files = [f for f in os.listdir(model_dir) if f.endswith('.png')]
+            png_count += len(png_files)
         if os.path.exists(sample_dir):
-            files_to_delete.append(f"sample_images/ ({len(os.listdir(sample_dir))} files)")
+            png_files = [f for f in os.listdir(sample_dir) if f.endswith('.png')]
+            png_count += len(png_files)
         
-        if files_to_delete:
-            print("  📁 Will delete:")
-            for item in files_to_delete:
-                print(f"    • {item}")
+        if png_count > 0:
+            print(f"  📁 Will delete {png_count} PNG files from training directories")
             
             # Ask for confirmation
-            response = input("  ❓ Continue? This will permanently delete old training data (y/N): ").strip().lower()
+            response = input("  ❓ Continue? This will permanently delete old training images (y/N): ").strip().lower()
             if response not in ['y', 'yes']:
                 print("  ❌ Cancelled. Use without --no-resume to continue existing training.")
                 import sys
                 sys.exit(0)
         else:
-            print("  ℹ️  No old files found to delete.")
+            print("  ℹ️  No old PNG files found to delete.")
         
-        # Clear directories
+        # Clear only PNG files from directories
+        deleted_count = 0
+        
         if os.path.exists(checkpoint_dir):
-            import shutil
-            shutil.rmtree(checkpoint_dir)
-            print(f"  ✅ Cleared checkpoints directory: {checkpoint_dir}")
+            for file in os.listdir(checkpoint_dir):
+                if file.endswith('.png'):
+                    os.remove(os.path.join(checkpoint_dir, file))
+                    deleted_count += 1
         
         if os.path.exists(model_dir):
-            import shutil
-            shutil.rmtree(model_dir)
-            print(f"  ✅ Cleared model weights directory: {model_dir}")
+            for file in os.listdir(model_dir):
+                if file.endswith('.png'):
+                    os.remove(os.path.join(model_dir, file))
+                    deleted_count += 1
         
         if os.path.exists(sample_dir):
-            import shutil
-            shutil.rmtree(sample_dir)
-            print(f"  ✅ Cleared sample images directory: {sample_dir}")
+            for file in os.listdir(sample_dir):
+                if file.endswith('.png'):
+                    os.remove(os.path.join(sample_dir, file))
+                    deleted_count += 1
+        
+        if deleted_count > 0:
+            print(f"  ✅ Deleted {deleted_count} PNG files")
+        else:
+            print("  ℹ️  No PNG files to delete")
         
         print("  🆕 Ready for fresh training!")
     
@@ -642,8 +786,8 @@ def main():
         dataset_preset=args.dataset_preset
     )
     
-    # Set config name for filenames
-    config['config_name'] = f"{args.loss_preset}_{args.training_preset}_{args.model_preset}"
+    # Set config name for filenames (use just the main preset)
+    config['config_name'] = args.training_preset
     
     # Configure GPU
     device = configure_gpu() if args.device == 'cuda' else torch.device(args.device)

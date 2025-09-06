@@ -5,7 +5,7 @@
     "base_config": {
         "embedding_size": 512,
         "num_channels": 128,
-        "beta": 5.0,
+        "beta": 20.0,
         "input_img_size": 64,
         "batch_size": 128,
         "lr": 0.0001,
@@ -102,9 +102,9 @@
             "use_l1": true,
             "use_perceptual_loss": true,
             "use_lpips": false,
-            "mse_weight": 0.3,
-            "l1_weight": 0.2,
-            "perceptual_weight": 0.5,
+            "mse_weight": 0.2,
+            "l1_weight": 0.1,
+            "perceptual_weight": 0.7,
             "lpips_weight": 0.0
         },
         
@@ -132,9 +132,9 @@
             "use_l1": true,
             "use_perceptual_loss": true,
             "use_lpips": false,
-            "mse_weight": 0.3,
-            "l1_weight": 0.2,
-            "perceptual_weight": 0.5,
+            "mse_weight": 0.15,
+            "l1_weight": 0.05,
+            "perceptual_weight": 0.8,
             "lpips_weight": 0.0
         }
     },
