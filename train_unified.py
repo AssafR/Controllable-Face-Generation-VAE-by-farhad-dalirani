@@ -51,8 +51,23 @@ class VGGPerceptualLoss(nn.Module):
         if not TORCHVISION_AVAILABLE:
             raise ImportError("torchvision is required for VGG perceptual loss")
         
-        # Load pre-trained VGG19
-        full_vgg = models.vgg19(pretrained=True).features
+        # Load pre-trained VGG19 using modern API
+        try:
+            # Modern torchvision (0.13+) - preferred method
+            full_vgg = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).features
+            print("  ✅ Using modern VGG19 weights API (torchvision 0.13+)")
+        except AttributeError:
+            # Fallback for torchvision 0.12-0.13
+            try:
+                full_vgg = models.vgg19(weights='IMAGENET1K_V1').features
+                print("  ✅ Using VGG19 weights API (torchvision 0.12-0.13)")
+            except TypeError:
+                # Very old torchvision - use deprecated API with warning suppression
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    full_vgg = models.vgg19(pretrained=True).features
+                print("  ⚠️  Using deprecated VGG19 API (torchvision <0.12) - consider upgrading")
         
         if aggressive_optimization:
             # Ultra-aggressive optimization: only use 2-3 layers
@@ -332,25 +347,106 @@ class UnifiedVAETrainer:
             print(f"⚠️  Error calculating perceptual loss: {e}")
             return 0.0
     
+    def calculate_generation_quality_loss(self, reconst):
+        """Calculate quality loss for generated images to encourage diversity and sharpness."""
+        try:
+            # Encourage sharp, diverse images through multiple quality metrics
+            
+            # 1. Edge sharpness loss (encourage sharp edges)
+            def edge_loss(x):
+                # Sobel edge detection
+                sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32, device=x.device)
+                sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32, device=x.device)
+                sobel_x = sobel_x.view(1, 1, 3, 3)
+                sobel_y = sobel_y.view(1, 1, 3, 3)
+                
+                # Convert to grayscale
+                gray = 0.299 * x[:, 0:1] + 0.587 * x[:, 1:2] + 0.114 * x[:, 2:3]
+                
+                # Apply Sobel filters
+                edges_x = F.conv2d(gray, sobel_x, padding=1)
+                edges_y = F.conv2d(gray, sobel_y, padding=1)
+                edges = torch.sqrt(edges_x**2 + edges_y**2)
+                
+                # Encourage strong edges (maximize edge strength)
+                return -torch.mean(edges)  # Negative because we want to maximize edges
+            
+            # 2. Diversity loss (encourage variation within batch)
+            def diversity_loss(x):
+                # Calculate pairwise differences between images in batch
+                batch_size = x.shape[0]
+                if batch_size < 2:
+                    return torch.tensor(0.0, device=x.device)
+                
+                # Flatten images
+                x_flat = x.view(batch_size, -1)
+                
+                # Calculate pairwise L2 distances
+                distances = torch.cdist(x_flat, x_flat, p=2)
+                
+                # Remove diagonal (self-comparison)
+                mask = torch.eye(batch_size, device=x.device).bool()
+                distances = distances[~mask]
+                
+                # Encourage diversity (maximize distances)
+                return -torch.mean(distances)  # Negative because we want to maximize diversity
+            
+            # 3. Contrast loss (encourage good contrast)
+            def contrast_loss(x):
+                # Calculate local contrast
+                kernel = torch.ones(3, 3, dtype=torch.float32, device=x.device) / 9
+                kernel = kernel.view(1, 1, 3, 3)
+                
+                # Convert to grayscale
+                gray = 0.299 * x[:, 0:1] + 0.587 * x[:, 1:2] + 0.114 * x[:, 2:3]
+                
+                # Local mean
+                local_mean = F.conv2d(gray, kernel, padding=1)
+                
+                # Local variance (contrast)
+                local_var = F.conv2d((gray - local_mean)**2, kernel, padding=1)
+                
+                # Encourage good contrast (maximize variance)
+                return -torch.mean(local_var)  # Negative because we want to maximize contrast
+            
+            # Combine quality losses
+            edge_loss_val = edge_loss(reconst)
+            diversity_loss_val = diversity_loss(reconst)
+            contrast_loss_val = contrast_loss(reconst)
+            
+            # Weighted combination
+            quality_loss = 0.4 * edge_loss_val + 0.3 * diversity_loss_val + 0.3 * contrast_loss_val
+            
+            return quality_loss
+            
+        except Exception as e:
+            print(f"⚠️  Error calculating generation quality loss: {e}")
+            return torch.tensor(0.0, device=reconst.device)
+    
     def calculate_losses(self, images, reconst, emb_mean, emb_log_var):
         """Calculate all loss components."""
         # Basic reconstruction losses
         mse_loss = F.mse_loss(reconst, images)
         l1_loss = F.l1_loss(reconst, images)
         
-        # Perceptual loss
+        # Perceptual loss (reconstruction quality)
         perceptual_loss = self.calculate_perceptual_loss(images, reconst)
+        
+        # Generation quality loss (encourages diverse, sharp generated images)
+        generation_quality_loss = self.calculate_generation_quality_loss(reconst)
         
         # Get loss weights
         loss_config = self.config.get('loss_config', {})
         mse_weight = loss_config.get('mse_weight', 0.5)
         l1_weight = loss_config.get('l1_weight', 0.3)
         perceptual_weight = loss_config.get('perceptual_weight', 0.2)
+        generation_weight = loss_config.get('generation_weight', 0.1)  # New weight for generation quality
         
         # Combine reconstruction losses
         recon_loss = (mse_weight * mse_loss + 
                      l1_weight * l1_loss + 
-                     perceptual_weight * perceptual_loss)
+                     perceptual_weight * perceptual_loss +
+                     generation_weight * generation_quality_loss)
         
         # KL divergence loss
         kl_loss = self.model.kl_loss(emb_mean, emb_log_var)
@@ -363,6 +459,7 @@ class UnifiedVAETrainer:
             'mse': mse_loss.item(),
             'l1': l1_loss.item(),
             'perceptual': perceptual_loss.item() if isinstance(perceptual_loss, torch.Tensor) else perceptual_loss,
+            'generation_quality': generation_quality_loss.item() if isinstance(generation_quality_loss, torch.Tensor) else generation_quality_loss,
             'kl': kl_loss.item(),
             'total': total_loss.item()
         }
@@ -377,6 +474,7 @@ class UnifiedVAETrainer:
         train_kl = 0.0
         train_l1 = 0.0
         train_perceptual = 0.0
+        train_generation_quality = 0.0
         
         train_pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{self.config['max_epoch']} [Train]", leave=False)
         
@@ -405,6 +503,7 @@ class UnifiedVAETrainer:
             train_kl += loss_dict['kl']
             train_l1 += loss_dict['l1']
             train_perceptual += loss_dict['perceptual']
+            train_generation_quality += loss_dict['generation_quality']
             
             # Update progress bar
             train_pbar.set_postfix({
@@ -412,6 +511,7 @@ class UnifiedVAETrainer:
                 'MSE': f'{loss_dict["mse"]:.4f}',
                 'L1': f'{loss_dict["l1"]:.4f}',
                 'Perceptual': f'{loss_dict["perceptual"]:.4f}',
+                'GenQual': f'{loss_dict["generation_quality"]:.4f}',
                 'KL': f'{loss_dict["kl"]:.4f}'
             })
         
@@ -422,7 +522,8 @@ class UnifiedVAETrainer:
             'mse': train_mse / num_batches,
             'kl': train_kl / num_batches,
             'l1': train_l1 / num_batches,
-            'perceptual': train_perceptual / num_batches
+            'perceptual': train_perceptual / num_batches,
+            'generation_quality': train_generation_quality / num_batches
         }
     
     def validate_epoch(self, val_loader, epoch):
@@ -433,6 +534,7 @@ class UnifiedVAETrainer:
         val_kl = 0.0
         val_l1 = 0.0
         val_perceptual = 0.0
+        val_generation_quality = 0.0
         
         with torch.no_grad():
             val_pbar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{self.config['max_epoch']} [Val]", leave=False)
@@ -451,12 +553,14 @@ class UnifiedVAETrainer:
                 val_kl += loss_dict['kl']
                 val_l1 += loss_dict['l1']
                 val_perceptual += loss_dict['perceptual']
+                val_generation_quality += loss_dict['generation_quality']
                 
                 val_pbar.set_postfix({
                     'Loss': f'{total_loss.item():.6f}',
                     'MSE': f'{loss_dict["mse"]:.6f}',
                     'L1': f'{loss_dict["l1"]:.6f}',
                     'Perceptual': f'{loss_dict["perceptual"]:.6f}',
+                    'GenQual': f'{loss_dict["generation_quality"]:.6f}',
                     'KL': f'{loss_dict["kl"]:.6f}'
                 })
         
@@ -467,7 +571,8 @@ class UnifiedVAETrainer:
             'mse': val_mse / num_batches,
             'kl': val_kl / num_batches,
             'l1': val_l1 / num_batches,
-            'perceptual': val_perceptual / num_batches
+            'perceptual': val_perceptual / num_batches,
+            'generation_quality': val_generation_quality / num_batches
         }
     
     def save_checkpoint(self, epoch, is_best=False):
@@ -589,6 +694,82 @@ class UnifiedVAETrainer:
         
         print("  🆕 Ready for fresh training!")
     
+    def _assess_loss_behavior(self, train_metrics, val_metrics, epoch):
+        """Concise assessment of loss behavior and quality indicators."""
+        print(f"\n📈 TREND ANALYSIS:")
+        print(f"{'─'*40}")
+        
+        # Initialize tracking if first epoch
+        if not hasattr(self, 'loss_history'):
+            self.loss_history = {
+                'perceptual': [],
+                'generation_quality': [],
+                'kl': [],
+                'total': []
+            }
+        
+        # Store current values
+        self.loss_history['perceptual'].append(train_metrics['perceptual'])
+        self.loss_history['generation_quality'].append(train_metrics['generation_quality'])
+        self.loss_history['kl'].append(train_metrics['kl'])
+        self.loss_history['total'].append(train_metrics['loss'])
+        
+        # Only show trends if we have enough history
+        if len(self.loss_history['total']) < 2:
+            print(f"  📊 Collecting data... (need 2+ epochs for trends)")
+            return
+        
+        # Perceptual trend (if enabled)
+        if len(self.loss_history['perceptual']) > 1 and self.config.get('loss_config', {}).get('perceptual_weight', 0) > 0:
+            perc_trend = self.loss_history['perceptual'][-1] - self.loss_history['perceptual'][-2]
+            trend_icon = "📈" if perc_trend < 0 else "📉" if perc_trend > 0 else "➡️"
+            print(f"  {trend_icon} Perceptual: {perc_trend:+.4f} change")
+        
+        # Generation quality trend (if enabled)
+        if len(self.loss_history['generation_quality']) > 1 and self.config.get('loss_config', {}).get('generation_weight', 0) > 0:
+            gen_trend = self.loss_history['generation_quality'][-1] - self.loss_history['generation_quality'][-2]
+            trend_icon = "📈" if gen_trend < 0 else "📉" if gen_trend > 0 else "➡️"  # More negative = better
+            print(f"  {trend_icon} GenQual: {gen_trend:+.4f} change")
+        
+        # KL trend
+        if len(self.loss_history['kl']) > 1:
+            kl_trend = self.loss_history['kl'][-1] - self.loss_history['kl'][-2]
+            trend_icon = "📈" if kl_trend > 0 else "📉" if kl_trend < 0 else "➡️"
+            print(f"  {trend_icon} KL: {kl_trend:+.4f} change")
+        
+        # Overall training trend
+        if len(self.loss_history['total']) > 3:
+            recent_losses = self.loss_history['total'][-3:]
+            if all(recent_losses[i] >= recent_losses[i+1] for i in range(len(recent_losses)-1)):
+                print(f"  🟢 Overall: Converging (loss decreasing)")
+            elif all(recent_losses[i] <= recent_losses[i+1] for i in range(len(recent_losses)-1)):
+                print(f"  🔴 Overall: Diverging (loss increasing)")
+            else:
+                print(f"  🟡 Overall: Oscillating (loss fluctuating)")
+        
+        # Quick recommendations
+        recommendations = []
+        if train_metrics['kl'] < 0.0001:
+            recommendations.append("🔴 POSTERIOR COLLAPSE - increase beta!")
+        elif train_metrics['kl'] < 0.01:
+            recommendations.append("🟡 KL weak - consider increasing beta")
+        
+        if self.config.get('loss_config', {}).get('perceptual_weight', 0) > 0 and train_metrics['perceptual'] < 0.001:
+            recommendations.append("🟡 Perceptual weak - increase weight")
+        
+        if self.config.get('loss_config', {}).get('generation_weight', 0) > 0 and train_metrics['generation_quality'] > -0.001:
+            recommendations.append("🟡 GenQual weak - increase weight")
+        
+        if len(self.loss_history['total']) > 5 and self.loss_history['total'][-1] > self.loss_history['total'][-5]:
+            recommendations.append("🟡 Consider reducing learning rate")
+        
+        if recommendations:
+            print(f"\n💡 RECOMMENDATIONS:")
+            for rec in recommendations:
+                print(f"  {rec}")
+        else:
+            print(f"\n✅ All systems healthy! 🎉")
+    
     def print_configuration(self, mode="Fresh"):
         """Print current configuration."""
         print(f"\n📋 Current Configuration ({mode}):")
@@ -601,8 +782,9 @@ class UnifiedVAETrainer:
         
         # Print loss configuration
         loss_config = self.config.get('loss_config', {})
-        print(f"  • Loss weights: MSE={loss_config.get('mse_weight', 0)}, L1={loss_config.get('l1_weight', 0)}, Perceptual={loss_config.get('perceptual_weight', 0)}")
+        print(f"  • Loss weights: MSE={loss_config.get('mse_weight', 0)}, L1={loss_config.get('l1_weight', 0)}, Perceptual={loss_config.get('perceptual_weight', 0)}, GenQual={loss_config.get('generation_weight', 0)}")
         print(f"  • Loss components: MSE={loss_config.get('use_mse', False)}, L1={loss_config.get('use_l1', False)}, Perceptual={loss_config.get('use_perceptual_loss', False)}")
+        print(f"  • Generation Quality: Edge Sharpness (40%), Diversity (30%), Contrast (30%)")
     
     def generate_samples(self, epoch, val_data):
         """Generate sample images."""
@@ -719,12 +901,89 @@ class UnifiedVAETrainer:
             else:
                 gpu_memory_allocated = gpu_memory_reserved = gpu_memory_total = gpu_utilization = 0
             
-            # Print epoch summary
-            print(f"\nEpoch {epoch+1}/{self.config['max_epoch']} Summary:")
-            print(f"  Train Loss: {train_metrics['loss']:.6f} (MSE: {train_metrics['mse']:.6f}, KL: {train_metrics['kl']:.6f}, L1: {train_metrics['l1']:.6f}, Perceptual: {train_metrics['perceptual']:.6f})")
-            print(f"  Val Loss:   {val_metrics['loss']:.6f} (MSE: {val_metrics['mse']:.6f}, KL: {val_metrics['kl']:.6f}, L1: {val_metrics['l1']:.6f}, Perceptual: {val_metrics['perceptual']:.6f})")
-            print(f"  Learning Rate: {current_lr:.2e}")
-            print(f"  GPU Memory: {gpu_memory_allocated:.2f}GB / {gpu_memory_total:.1f}GB ({gpu_utilization:.1f}%)")
+            # Print epoch summary with clean, scannable formatting
+            print(f"\n{'='*60}")
+            print(f"📊 EPOCH {epoch+1}/{self.config['max_epoch']} SUMMARY")
+            print(f"{'='*60}")
+            
+            # Main metrics - easy to scan
+            print(f"🎯 TOTAL LOSS: {train_metrics['loss']:.4f} (Train) | {val_metrics['loss']:.4f} (Val)")
+            print(f"📈 LEARNING RATE: {current_lr:.2e}")
+            print(f"💾 GPU MEMORY: {gpu_memory_allocated:.1f}GB / {gpu_memory_total:.1f}GB ({gpu_utilization:.0f}%)")
+            
+            print(f"\n🔍 LOSS BREAKDOWN:")
+            print(f"{'─'*40}")
+            
+            # Loss components with clear formatting and status indicators
+            loss_config = self.config.get('loss_config', {})
+            mse_weight = loss_config.get('mse_weight', 0)
+            l1_weight = loss_config.get('l1_weight', 0)
+            perceptual_weight = loss_config.get('perceptual_weight', 0)
+            generation_weight = loss_config.get('generation_weight', 0)
+            
+            if mse_weight > 0:
+                mse_contrib = (train_metrics['mse'] * mse_weight) / train_metrics['loss'] * 100
+                status = "✅" if 5 <= mse_contrib <= 50 else "⚠️"
+                print(f"  {status} MSE:     {train_metrics['mse']:.4f} ({mse_contrib:.0f}% of total)")
+            
+            if l1_weight > 0:
+                l1_contrib = (train_metrics['l1'] * l1_weight) / train_metrics['loss'] * 100
+                status = "✅" if 5 <= l1_contrib <= 50 else "⚠️"
+                print(f"  {status} L1:      {train_metrics['l1']:.4f} ({l1_contrib:.0f}% of total)")
+            
+            if perceptual_weight > 0:
+                perc_contrib = (train_metrics['perceptual'] * perceptual_weight) / train_metrics['loss'] * 100
+                status = "✅" if perc_contrib >= 10 else "⚠️"
+                print(f"  {status} Perceptual: {train_metrics['perceptual']:.4f} ({perc_contrib:.0f}% of total)")
+            
+            if generation_weight > 0:
+                gen_contrib = (train_metrics['generation_quality'] * generation_weight) / train_metrics['loss'] * 100
+                status = "✅" if gen_contrib >= 5 else "⚠️"
+                print(f"  {status} GenQual:  {train_metrics['generation_quality']:.4f} ({gen_contrib:.0f}% of total)")
+            
+            # KL divergence - critical for VAE health
+            kl_contrib = (train_metrics['kl'] * self.config.get('beta', 1.0)) / train_metrics['loss'] * 100
+            if train_metrics['kl'] < 0.0001:
+                print(f"  🔴 KL:      {train_metrics['kl']:.6f} (POSTERIOR COLLAPSE!)")
+            elif train_metrics['kl'] < 0.01:
+                print(f"  🟡 KL:      {train_metrics['kl']:.4f} (Weak - increase beta)")
+            else:
+                print(f"  ✅ KL:      {train_metrics['kl']:.4f} (Healthy)")
+            
+            # Quick health check
+            print(f"\n🏥 QUICK HEALTH CHECK:")
+            print(f"{'─'*40}")
+            
+            # Perceptual health
+            if perceptual_weight > 0:
+                if train_metrics['perceptual'] > 0.01:
+                    print(f"  🟢 Perceptual: Strong (>{train_metrics['perceptual']:.4f})")
+                elif train_metrics['perceptual'] > 0.005:
+                    print(f"  🟡 Perceptual: Good ({train_metrics['perceptual']:.4f})")
+                else:
+                    print(f"  🔴 Perceptual: Weak ({train_metrics['perceptual']:.4f}) - increase weight")
+            
+            # Generation quality health
+            if generation_weight > 0:
+                if train_metrics['generation_quality'] < -0.01:
+                    print(f"  🟢 GenQual: Strong ({train_metrics['generation_quality']:.4f})")
+                elif train_metrics['generation_quality'] < -0.005:
+                    print(f"  🟡 GenQual: Good ({train_metrics['generation_quality']:.4f})")
+                else:
+                    print(f"  🔴 GenQual: Weak ({train_metrics['generation_quality']:.4f}) - increase weight")
+            
+            # Overall training health
+            if len(self.loss_history.get('total', [])) > 3:
+                recent_losses = self.loss_history['total'][-3:]
+                if all(recent_losses[i] >= recent_losses[i+1] for i in range(len(recent_losses)-1)):
+                    print(f"  🟢 Training: Converging")
+                elif all(recent_losses[i] <= recent_losses[i+1] for i in range(len(recent_losses)-1)):
+                    print(f"  🔴 Training: Diverging - reduce LR")
+                else:
+                    print(f"  🟡 Training: Oscillating")
+            
+            # Comprehensive loss behavior assessment
+            self._assess_loss_behavior(train_metrics, val_metrics, epoch)
             
             # Save best model
             is_best = val_metrics['loss'] < self.best_val_loss

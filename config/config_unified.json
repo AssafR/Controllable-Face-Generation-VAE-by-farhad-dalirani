@@ -102,9 +102,10 @@
             "use_l1": true,
             "use_perceptual_loss": true,
             "use_lpips": false,
-            "mse_weight": 0.2,
-            "l1_weight": 0.1,
+            "mse_weight": 0.1,
+            "l1_weight": 0.05,
             "perceptual_weight": 0.7,
+            "generation_weight": 0.15,
             "lpips_weight": 0.0
         },
         
