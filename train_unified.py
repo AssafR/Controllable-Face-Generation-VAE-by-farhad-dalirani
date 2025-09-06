@@ -44,29 +44,51 @@ from utilities_pytorch import get_split_data, configure_gpu, display_image_grid,
 from config_loader import ConfigLoader
 
 class VGGPerceptualLoss(nn.Module):
-    """VGG-based perceptual loss for better texture and detail preservation."""
+    """Memory-optimized VGG-based perceptual loss."""
     
-    def __init__(self, device='cuda'):
+    def __init__(self, device='cuda', aggressive_optimization=False):
         super().__init__()
         if not TORCHVISION_AVAILABLE:
             raise ImportError("torchvision is required for VGG perceptual loss")
         
         # Load pre-trained VGG19
-        vgg = models.vgg19(pretrained=True).features
-        self.vgg = vgg.to(device)
+        full_vgg = models.vgg19(pretrained=True).features
         
-        # Freeze VGG parameters
-        for param in self.vgg.parameters():
+        if aggressive_optimization:
+            # Ultra-aggressive optimization: only use 2-3 layers
+            self.feature_layers = [1, 6, 11]  # conv1_2, conv2_2, conv3_4 only
+            print("  🚀 Using aggressive VGG optimization (3 layers only)")
+        else:
+            # Standard optimization: use 5 layers
+            self.feature_layers = [1, 6, 11, 20, 29]  # conv1_2, conv2_2, conv3_4, conv4_4, conv5_4
+            print("  ⚡ Using standard VGG optimization (5 layers)")
+        
+        # Build minimal VGG with only necessary layers
+        self.vgg_layers = nn.ModuleList()
+        for i, layer in enumerate(full_vgg):
+            if i <= max(self.feature_layers):
+                self.vgg_layers.append(layer)
+            else:
+                break  # Stop after the last layer we need
+        
+        # Move to device
+        self.vgg_layers = self.vgg_layers.to(device)
+        
+        # Freeze parameters
+        for param in self.vgg_layers.parameters():
             param.requires_grad = False
-        
-        # Define feature extraction layers
-        self.feature_layers = [1, 6, 11, 20, 29]  # conv1_2, conv2_2, conv3_4, conv4_4, conv5_4
         
         # Normalize images to VGG input range
         self.normalize = transforms.Normalize(
             mean=[0.485, 0.456, 0.406],
             std=[0.229, 0.224, 0.225]
         )
+        
+        # Calculate memory savings
+        original_params = sum(p.numel() for p in full_vgg.parameters())
+        optimized_params = sum(p.numel() for p in self.vgg_layers.parameters())
+        memory_savings = (1 - optimized_params / original_params) * 100
+        print(f"  💾 VGG Memory Optimization: {memory_savings:.1f}% reduction ({optimized_params:,} vs {original_params:,} parameters)")
     
     def forward(self, x, y):
         """Calculate perceptual loss between x and y."""
@@ -86,9 +108,9 @@ class VGGPerceptualLoss(nn.Module):
         return loss / len(x_features)
     
     def _extract_features(self, x):
-        """Extract features from VGG layers."""
+        """Extract features from optimized VGG layers."""
         features = []
-        for i, layer in enumerate(self.vgg):
+        for i, layer in enumerate(self.vgg_layers):
             x = layer(x)
             if i in self.feature_layers:
                 features.append(x)
@@ -115,7 +137,11 @@ class UnifiedVAETrainer:
         if loss_config.get('use_perceptual_loss', False):
             try:
                 if TORCHVISION_AVAILABLE:
-                    self.perceptual_loss_fn = VGGPerceptualLoss(device)
+                    # Determine if we need aggressive optimization based on GPU memory
+                    gpu_memory_gb = torch.cuda.get_device_properties(device).total_memory / 1024**3 if torch.cuda.is_available() else 0
+                    aggressive_optimization = gpu_memory_gb < 12  # Use aggressive optimization for <12GB GPUs
+                    
+                    self.perceptual_loss_fn = VGGPerceptualLoss(device, aggressive_optimization=aggressive_optimization)
                     # VGG uses significant memory, reduce batch size intelligently
                     self._adjust_batch_size_for_vgg(config, device)
                     print(f"  ✅ Using VGG-based perceptual loss")
@@ -137,7 +163,7 @@ class UnifiedVAETrainer:
         gpu_memory_gb = torch.cuda.get_device_properties(device).total_memory / 1024**3
         
         # Estimate VGG memory usage (rough estimates)
-        # VGG19: ~3-5GB for forward pass + features
+        # Optimized VGG19: ~1-2GB for forward pass + features (vs 3-5GB for full VGG)
         # VAE model: ~1-2GB depending on resolution
         # Images: batch_size * height * width * 3 * 4 bytes
         
@@ -145,7 +171,14 @@ class UnifiedVAETrainer:
         
         # Conservative memory allocation
         available_memory = gpu_memory_gb * 0.8  # Use 80% of GPU memory
-        vgg_overhead = 4.0  # GB for VGG
+        
+        # Determine VGG overhead based on optimization level
+        gpu_memory_gb = torch.cuda.get_device_properties(device).total_memory / 1024**3
+        if gpu_memory_gb < 12:
+            vgg_overhead = 1.5  # GB for aggressive VGG optimization (3 layers)
+        else:
+            vgg_overhead = 2.5  # GB for standard VGG optimization (5 layers)
+        
         vae_overhead = 2.0  # GB for VAE model
         
         usable_memory = available_memory - vgg_overhead - vae_overhead
