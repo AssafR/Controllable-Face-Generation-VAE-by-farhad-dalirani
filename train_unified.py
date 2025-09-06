@@ -562,9 +562,8 @@ class UnifiedVAETrainer:
             # Save checkpoint
             self.save_checkpoint(epoch, is_best)
             
-            # Generate sample images
-            if (epoch + 1) <= 5 or (epoch + 1) % 5 == 0:
-                self.generate_samples(epoch, val_loader.dataset)
+            # Generate sample images for every epoch
+            self.generate_samples(epoch, val_loader.dataset)
             
             # Early stopping
             if self.patience_counter >= early_stopping_patience:
