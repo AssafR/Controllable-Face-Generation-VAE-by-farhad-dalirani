@@ -5,7 +5,7 @@
     "base_config": {
         "embedding_size": 512,
         "num_channels": 128,
-        "beta": 20.0,
+        "beta": 1.0,
         "input_img_size": 64,
         "batch_size": 128,
         "lr": 0.0001,
@@ -205,6 +205,17 @@
             "max_epoch": 100,
             "batch_size": 256,
             "lr": 0.0002
+        },
+        
+        "beta_scheduled_training": {
+            "_description": "Beta-scheduled training - starts with low beta, gradually increases",
+            "_use_case": "Prevents KL dominance, better reconstruction learning",
+            "max_epoch": 100,
+            "batch_size": 128,
+            "lr": 0.0001,
+            "beta_schedule": true,
+            "beta_start": 0.1,
+            "beta_end": 2.0
         },
         
         "balanced_high_quality_training": {

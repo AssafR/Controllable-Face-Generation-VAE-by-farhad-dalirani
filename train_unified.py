@@ -250,6 +250,25 @@ class UnifiedVAETrainer:
             self.writer = None
             print(f"  • Logging: Disabled (TensorBoard not available)")
     
+    def get_current_beta(self):
+        """Get current beta value with optional scheduling."""
+        if not hasattr(self, 'current_epoch'):
+            self.current_epoch = 0
+        
+        # Check if beta scheduling is enabled
+        if self.config.get('beta_schedule', False):
+            beta_start = self.config.get('beta_start', 0.1)
+            beta_end = self.config.get('beta_end', 2.0)
+            max_epochs = self.config.get('max_epoch', 100)
+            
+            # Linear schedule from beta_start to beta_end
+            progress = min(self.current_epoch / max_epochs, 1.0)
+            current_beta = beta_start + (beta_end - beta_start) * progress
+        else:
+            current_beta = self.config.get('beta', 1.0)
+        
+        return current_beta
+    
     def create_model(self):
         """Create and configure the VAE model."""
         print(f"\n🏗️  Creating model...")
@@ -472,8 +491,11 @@ class UnifiedVAETrainer:
         # KL divergence loss
         kl_loss = self.model.kl_loss(emb_mean, emb_log_var)
         
+        # Get current beta (with scheduling if enabled)
+        current_beta = self.get_current_beta()
+        
         # Total loss
-        total_loss = recon_loss + self.config['beta'] * kl_loss
+        total_loss = recon_loss + current_beta * kl_loss
         
         # Store loss components for logging
         loss_dict = {
@@ -793,13 +815,21 @@ class UnifiedVAETrainer:
         print(f"  • Max epochs: {self.config['max_epoch']}")
         print(f"  • Batch size: {self.config['batch_size']}")
         print(f"  • Learning rate: {self.config['lr']}")
-        print(f"  • Beta (KL weight): {self.config['beta']}")
         
         # Print loss configuration
         loss_config = self.config.get('loss_config', {})
         print(f"  • Loss weights: MSE={loss_config.get('mse_weight', 0)}, L1={loss_config.get('l1_weight', 0)}, Perceptual={loss_config.get('perceptual_weight', 0)}, GenQual={loss_config.get('generation_weight', 0)}")
         print(f"  • Loss components: MSE={loss_config.get('use_mse', False)}, L1={loss_config.get('use_l1', False)}, Perceptual={loss_config.get('use_perceptual_loss', False)}")
         print(f"  • Generation Quality: Edge Sharpness (40%), Diversity (30%), Contrast (30%)")
+        
+        # Show beta configuration
+        if self.config.get('beta_schedule', False):
+            beta_start = self.config.get('beta_start', 0.1)
+            beta_end = self.config.get('beta_end', 2.0)
+            print(f"  • Beta Schedule: {beta_start:.1f} → {beta_end:.1f} (linear)")
+        else:
+            current_beta = self.get_current_beta()
+            print(f"  • Beta: {current_beta:.3f} (fixed)")
     
     def generate_samples(self, epoch, val_data):
         """Generate sample images."""
@@ -884,6 +914,9 @@ class UnifiedVAETrainer:
         early_stopping_patience = 12
         
         for epoch in range(self.start_epoch, self.config['max_epoch']):
+            # Update current epoch for beta scheduling
+            self.current_epoch = epoch
+            
             # Training phase
             train_metrics = self.train_epoch(train_loader, epoch)
             
@@ -907,6 +940,10 @@ class UnifiedVAETrainer:
                 self.writer.add_scalar('Perceptual/Train', train_metrics['perceptual'], epoch)
                 self.writer.add_scalar('Perceptual/Val', val_metrics['perceptual'], epoch)
                 self.writer.add_scalar('Learning_Rate', current_lr, epoch)
+                
+                # Log beta value
+                current_beta = self.get_current_beta()
+                self.writer.add_scalar('Beta', current_beta, epoch)
             
             # Get GPU statistics
             if torch.cuda.is_available():
@@ -925,6 +962,17 @@ class UnifiedVAETrainer:
             # Main metrics - easy to scan
             print(f"🎯 TOTAL LOSS: {train_metrics['loss']:.4f} (Train) | {val_metrics['loss']:.4f} (Val)")
             print(f"📈 LEARNING RATE: {current_lr:.2e}")
+            
+            # Display current beta value
+            current_beta = self.get_current_beta()
+            if self.config.get('beta_schedule', False):
+                beta_start = self.config.get('beta_start', 0.1)
+                beta_end = self.config.get('beta_end', 2.0)
+                progress = min(epoch / self.config.get('max_epoch', 100), 1.0)
+                print(f"🔄 BETA: {current_beta:.3f} (scheduled: {beta_start:.1f} → {beta_end:.1f}, {progress*100:.0f}% complete)")
+            else:
+                print(f"🔄 BETA: {current_beta:.3f} (fixed)")
+            
             print(f"💾 GPU MEMORY: {gpu_memory_allocated:.1f}GB / {gpu_memory_total:.1f}GB ({gpu_utilization:.0f}%)")
             
             print(f"\n🔍 LOSS BREAKDOWN:")
@@ -1069,7 +1117,7 @@ def main():
                        choices=['quick_test', 'fast_training', 'standard_training', 'extended_training',
                                'ultra_high_quality_training', 'fast_high_quality_training', 
                                'balanced_high_quality_training', 'compact_high_quality_training',
-                               'full_retrain_training'],
+                               'beta_scheduled_training', 'full_retrain_training'],
                        help='Training configuration preset')
     parser.add_argument('--model-preset', type=str, default='fast_high_quality',
                        choices=['small', 'medium', 'large', 'high_res', 'ultra_high_quality',
@@ -1082,6 +1130,8 @@ def main():
                        help='Start fresh training (ignore checkpoints)')
     parser.add_argument('--batch-size', type=int, default=None,
                        help='Override batch size (e.g., 128, 256, 384)')
+    parser.add_argument('--lr', '--learning-rate', type=float, default=None,
+                       help='Override learning rate (e.g., 0.001, 0.0001, 0.00001)')
     parser.add_argument('--device', type=str, default='cuda',
                        help='Device to use for training')
     
@@ -1101,6 +1151,11 @@ def main():
         config['batch_size'] = args.batch_size
         config['_user_override_batch_size'] = True
         print(f"📊 Batch size overridden to: {args.batch_size}")
+    
+    # Override learning rate if specified
+    if args.lr:
+        config['lr'] = args.lr
+        print(f"📈 Learning rate overridden to: {args.lr}")
     
     # Set config name for filenames (include both model and training presets)
     config['config_name'] = f"{args.model_preset}_{args.training_preset}"
