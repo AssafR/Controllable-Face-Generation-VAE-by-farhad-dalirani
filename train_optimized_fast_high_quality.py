@@ -163,6 +163,20 @@ def train_optimized_fast_high_quality():
         print(f"   ✅ Resumed from epoch {start_epoch}")
         print(f"   📊 Best validation loss: {best_val_loss:.6f}")
         print(f"   ⏳ Patience counter: {patience_counter}")
+        
+        # Display current configuration when resuming
+        print(f"\n📋 Current Configuration (Resumed):")
+        print(f"  • Input size: {config['input_img_size']}x{config['input_img_size']}")
+        print(f"  • Embedding size: {config['embedding_size']}")
+        print(f"  • Max epochs: {config['max_epoch']}")
+        print(f"  • Batch size: {config['batch_size']} (optimized)")
+        print(f"  • Learning rate: {config['lr']}")
+        print(f"  • Beta (KL weight): {config['beta']}")
+        
+        # Print loss configuration
+        loss_config = config.get('loss_config', {})
+        print(f"  • Loss weights: MSE={loss_config.get('mse_weight', 0)}, L1={loss_config.get('l1_weight', 0)}, Perceptual={loss_config.get('perceptual_weight', 0)}")
+        print(f"  • Loss components: MSE={loss_config.get('use_mse', False)}, L1={loss_config.get('use_l1', False)}, Perceptual={loss_config.get('use_perceptual_loss', False)}")
     else:
         print("🆕 No checkpoint found, starting fresh training")
     
