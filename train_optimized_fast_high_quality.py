@@ -464,8 +464,8 @@ def train_optimized_fast_high_quality():
             torch.save(checkpoint, periodic_checkpoint_path)
             print(f"  💾 Periodic checkpoint saved: {periodic_checkpoint_path}")
         
-        # Generate sample images for first 5 epochs, then every 5 epochs
-        if (epoch + 1) <= 5 or (epoch + 1) % 5 == 0:
+        # Generate sample images for first 50 epochs, then every 5 epochs
+        if (epoch + 1) <= 50 or (epoch + 1) % 5 == 0:
             print(f"  🖼️  Generating sample images...")
             
             # Create sample_images directory
