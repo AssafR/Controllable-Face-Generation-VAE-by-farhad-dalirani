@@ -145,9 +145,18 @@ class UnifiedVAETrainer:
         self.best_val_loss = float('inf')
         self.patience_counter = 0
         
+        # Initialize loss history tracking
+        self.loss_history = {
+            'perceptual': [],
+            'generation_quality': [],
+            'kl': [],
+            'total': []
+        }
+        
         # Initialize perceptual loss and adjust batch size
         self.perceptual_loss_fn = None
         self.original_batch_size = config['batch_size']
+        self.user_override_batch_size = config.get('_user_override_batch_size', False)
         loss_config = config.get('loss_config', {})
         if loss_config.get('use_perceptual_loss', False):
             try:
@@ -160,7 +169,10 @@ class UnifiedVAETrainer:
                     # VGG uses significant memory, reduce batch size intelligently
                     self._adjust_batch_size_for_vgg(config, device)
                     print(f"  ✅ Using VGG-based perceptual loss")
-                    print(f"  ⚡ Adjusted batch size from {self.original_batch_size} to {config['batch_size']} for VGG memory requirements")
+                    if self.user_override_batch_size:
+                        print(f"  ⚡ User specified batch size: {config['batch_size']} (VGG memory analysis applied)")
+                    else:
+                        print(f"  ⚡ Adjusted batch size from {self.original_batch_size} to {config['batch_size']} for VGG memory requirements")
                 else:
                     print("  ⚠️  torchvision not available, using high-pass filter perceptual loss")
             except Exception as e:
@@ -206,7 +218,12 @@ class UnifiedVAETrainer:
             config['batch_size'] = 8
         
         # Ensure batch size is reasonable
-        config['batch_size'] = max(8, min(config['batch_size'], 64))
+        if not self.user_override_batch_size:
+            # Only cap if user didn't explicitly set batch size
+            config['batch_size'] = max(8, min(config['batch_size'], 512))
+        else:
+            # User specified batch size - only ensure it's not too small
+            config['batch_size'] = max(8, config['batch_size'])
         
         # Print memory analysis
         print(f"  📊 Memory Analysis:")
@@ -368,8 +385,10 @@ class UnifiedVAETrainer:
                 edges_y = F.conv2d(gray, sobel_y, padding=1)
                 edges = torch.sqrt(edges_x**2 + edges_y**2)
                 
-                # Encourage strong edges (maximize edge strength)
-                return -torch.mean(edges)  # Negative because we want to maximize edges
+                # Convert to positive loss: minimize reciprocal to maximize edges
+                # Add small epsilon to prevent division by zero and stabilize gradients
+                edge_strength = torch.mean(edges)
+                return 1.0 / (edge_strength + 1e-6)  # Minimize this to maximize edge strength
             
             # 2. Diversity loss (encourage variation within batch)
             def diversity_loss(x):
@@ -388,8 +407,9 @@ class UnifiedVAETrainer:
                 mask = torch.eye(batch_size, device=x.device).bool()
                 distances = distances[~mask]
                 
-                # Encourage diversity (maximize distances)
-                return -torch.mean(distances)  # Negative because we want to maximize diversity
+                # Convert to positive loss: minimize reciprocal to maximize diversity
+                diversity_strength = torch.mean(distances)
+                return 1.0 / (diversity_strength + 1e-6)  # Minimize this to maximize diversity
             
             # 3. Contrast loss (encourage good contrast)
             def contrast_loss(x):
@@ -406,8 +426,9 @@ class UnifiedVAETrainer:
                 # Local variance (contrast)
                 local_var = F.conv2d((gray - local_mean)**2, kernel, padding=1)
                 
-                # Encourage good contrast (maximize variance)
-                return -torch.mean(local_var)  # Negative because we want to maximize contrast
+                # Convert to positive loss: minimize reciprocal to maximize contrast
+                contrast_strength = torch.mean(local_var)
+                return 1.0 / (contrast_strength + 1e-6)  # Minimize this to maximize contrast
             
             # Combine quality losses
             edge_loss_val = edge_loss(reconst)
@@ -699,14 +720,7 @@ class UnifiedVAETrainer:
         print(f"\n📈 TREND ANALYSIS:")
         print(f"{'─'*40}")
         
-        # Initialize tracking if first epoch
-        if not hasattr(self, 'loss_history'):
-            self.loss_history = {
-                'perceptual': [],
-                'generation_quality': [],
-                'kl': [],
-                'total': []
-            }
+        # loss_history is now initialized in __init__
         
         # Store current values
         self.loss_history['perceptual'].append(train_metrics['perceptual'])
@@ -1064,6 +1078,8 @@ def main():
                        help='Dataset size preset')
     parser.add_argument('--no-resume', action='store_true',
                        help='Start fresh training (ignore checkpoints)')
+    parser.add_argument('--batch-size', type=int, default=None,
+                       help='Override batch size (e.g., 128, 256, 384)')
     parser.add_argument('--device', type=str, default='cuda',
                        help='Device to use for training')
     
@@ -1077,6 +1093,12 @@ def main():
         model_preset=args.model_preset,
         dataset_preset=args.dataset_preset
     )
+    
+    # Override batch size if specified
+    if args.batch_size:
+        config['batch_size'] = args.batch_size
+        config['_user_override_batch_size'] = True
+        print(f"📊 Batch size overridden to: {args.batch_size}")
     
     # Set config name for filenames (use just the main preset)
     config['config_name'] = args.training_preset

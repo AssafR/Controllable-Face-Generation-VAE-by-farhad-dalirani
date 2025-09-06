@@ -15,6 +15,8 @@ def main():
                        choices=['quick_test', 'fast_high_quality', 'ultra_high_quality', 
                                'balanced_high_quality', 'full_retrain', 'resume_fix'],
                        help='Training mode')
+    parser.add_argument('--batch-size', type=int, default=None,
+                       help='Override batch size (e.g., 128, 256)')
     parser.add_argument('--no-resume', action='store_true',
                        help='Start fresh training (delete old checkpoints and model files)')
     
@@ -72,6 +74,9 @@ def main():
     cmd.extend(['--model-preset', mode_mappings[args.mode]['model_preset']])
     cmd.extend(['--dataset-preset', mode_mappings[args.mode]['dataset_preset']])
     
+    if args.batch_size:
+        cmd.extend(['--batch-size', str(args.batch_size)])
+    
     if args.no_resume:
         cmd.append('--no-resume')
     
@@ -86,6 +91,8 @@ def main():
     }
     
     print(f"🚀 Starting VAE Training: {mode_descriptions[args.mode]}")
+    if args.batch_size:
+        print(f"📊 Batch Size Override: {args.batch_size}")
     print(f"Command: {' '.join(cmd)}")
     print("=" * 70)
     
