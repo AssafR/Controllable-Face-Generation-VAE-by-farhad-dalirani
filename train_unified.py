@@ -612,19 +612,20 @@ class UnifiedVAETrainer:
         }
         
         # Save regular checkpoint
-        checkpoint_path = os.path.join(checkpoint_dir, "training_checkpoint.pth")
+        config_name = self.config.get('config_name', 'unified')
+        checkpoint_path = os.path.join(checkpoint_dir, f"{config_name}_training_checkpoint.pth")
         torch.save(checkpoint, checkpoint_path)
         
         # Save best model
         if is_best:
             os.makedirs(self.config['model_save_path'], exist_ok=True)
-            best_model_path = f"{self.config['model_save_path']}/vae_best_model.pth"
+            best_model_path = f"{self.config['model_save_path']}/{config_name}_vae_best_model.pth"
             torch.save(self.model.state_dict(), best_model_path)
             print(f"  ✅ New best model saved: {best_model_path}")
         
         # Save periodic checkpoint
         if (epoch + 1) % 10 == 0:
-            periodic_path = os.path.join(checkpoint_dir, f"checkpoint_epoch_{epoch+1:03d}.pth")
+            periodic_path = os.path.join(checkpoint_dir, f"{config_name}_checkpoint_epoch_{epoch+1:03d}.pth")
             torch.save(checkpoint, periodic_path)
             print(f"  💾 Periodic checkpoint saved: {periodic_path}")
     
@@ -869,7 +870,8 @@ class UnifiedVAETrainer:
         train_loader, val_loader = self.load_data()
         
         # Handle checkpoint loading/clearing
-        checkpoint_path = "checkpoints/training_checkpoint.pth"
+        config_name = self.config.get('config_name', 'unified')
+        checkpoint_path = f"checkpoints/{config_name}_training_checkpoint.pth"
         if not resume:
             # Clear old checkpoints and model files for fresh start
             self.clear_old_files()
@@ -1061,7 +1063,7 @@ def main():
     parser = argparse.ArgumentParser(description='Unified VAE Training Script')
     parser.add_argument('--loss-preset', type=str, default='high_quality',
                        choices=['mse_only', 'mse_l1', 'perceptual', 'lpips', 'custom_balanced', 
-                               'high_quality', 'ultra_high_quality_loss', 'full_retrain_optimal'],
+                               'high_quality', 'high_diversity', 'ultra_high_quality_loss', 'full_retrain_optimal'],
                        help='Loss function preset')
     parser.add_argument('--training-preset', type=str, default='fast_high_quality_training',
                        choices=['quick_test', 'fast_training', 'standard_training', 'extended_training',
@@ -1100,8 +1102,8 @@ def main():
         config['_user_override_batch_size'] = True
         print(f"📊 Batch size overridden to: {args.batch_size}")
     
-    # Set config name for filenames (use just the main preset)
-    config['config_name'] = args.training_preset
+    # Set config name for filenames (include both model and training presets)
+    config['config_name'] = f"{args.model_preset}_{args.training_preset}"
     
     # Configure GPU
     device = configure_gpu() if args.device == 'cuda' else torch.device(args.device)
