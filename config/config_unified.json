@@ -5,7 +5,7 @@
     "base_config": {
         "embedding_size": 512,
         "num_channels": 128,
-        "beta": 1.0,
+        "beta": 5.0,
         "input_img_size": 64,
         "batch_size": 128,
         "lr": 0.0001,
@@ -102,9 +102,9 @@
             "use_l1": true,
             "use_perceptual_loss": true,
             "use_lpips": false,
-            "mse_weight": 0.5,
-            "l1_weight": 0.3,
-            "perceptual_weight": 0.2,
+            "mse_weight": 0.3,
+            "l1_weight": 0.2,
+            "perceptual_weight": 0.5,
             "lpips_weight": 0.0
         },
         
@@ -121,6 +121,21 @@
             "l1_weight": 0.2,
             "perceptual_weight": 0.2,
             "lpips_weight": 0.2
+        },
+        
+        "full_retrain_optimal": {
+            "_description": "Optimal configuration for full retraining from scratch",
+            "_use_case": "Fresh training with balanced loss weights to prevent posterior collapse",
+            "_pros": "Prevents blurry images, good diversity, sharp details",
+            "_cons": "Requires full retraining",
+            "use_mse": true,
+            "use_l1": true,
+            "use_perceptual_loss": true,
+            "use_lpips": false,
+            "mse_weight": 0.3,
+            "l1_weight": 0.2,
+            "perceptual_weight": 0.5,
+            "lpips_weight": 0.0
         }
     },
     
@@ -171,8 +186,8 @@
             "_description": "Fast high quality training - 100 epochs, optimized batch size, moderate LR",
             "_use_case": "High quality with optimal training speed on RTX 3090",
             "max_epoch": 100,
-            "batch_size": 512,
-            "lr": 0.0001
+            "batch_size": 256,
+            "lr": 0.0002
         },
         
         "balanced_high_quality_training": {
@@ -189,6 +204,14 @@
             "max_epoch": 80,
             "batch_size": 256,
             "lr": 0.0002
+        },
+        
+        "full_retrain_training": {
+            "_description": "Full retrain training - 150 epochs, balanced settings for fresh start",
+            "_use_case": "Complete retraining from scratch with optimal parameters",
+            "max_epoch": 150,
+            "batch_size": 128,
+            "lr": 0.0001
         }
     },
     
