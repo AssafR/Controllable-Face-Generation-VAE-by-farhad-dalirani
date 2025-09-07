@@ -28,8 +28,8 @@ class ConfigurationManager:
         print(f"\n🏗️  MODEL CONFIGURATION:")
         print(f"  • Architecture: VAE (PyTorch)")
         print(f"  • Embedding size: {self.config['embedding_size']}")
-        print(f"  • Image size: {self.config['image_size']}x{self.config['image_size']}")
-        print(f"  • Channels: {self.config['channels']}")
+        print(f"  • Image size: {self.config['input_img_size']}x{self.config['input_img_size']}")
+        print(f"  • Channels: {self.config['num_channels']}")
         
         # Training configuration
         print(f"\n🎯 TRAINING CONFIGURATION:")
