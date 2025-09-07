@@ -49,6 +49,31 @@
 - **Validation**: Separate validation loss tracking
 - **Samples**: Generated images every 10 epochs
 
+### **KL Scheduling and Stability**
+
+We use adaptive KL control to maintain the KL contribution within a target band and prevent early dominance that can cause posterior collapse.
+
+#### Cyclical KL Annealing (Bowman et al., 2016)
+
+We also support optional cyclical KL annealing to periodically allow reconstruction losses (MSE/L1/perceptual) to recover while maintaining a gentle upward trend in KL pressure.
+
+- Reference: Bowman, Samuel R., Luke Vilnis, Oriol Vinyals, Andrew M. Dai, Rafal Jozefowicz, and Samy Bengio. "Generating Sentences from a Continuous Space." Proceedings of the 2016 Conference on Empirical Methods in Natural Language Processing (EMNLP) Workshop on Representation Learning for NLP (CoNLL 2016).
+- Implementation notes:
+  - A short cooldown at the start of each cycle reduces beta.
+  - A slowly rising beta floor avoids collapsing back to zero pressure.
+  - Adaptive control remains active, using smoothened KL contribution.
+
+Configuration keys (in `training_presets`):
+
+```
+"kl_cycle_enabled": true,
+"kl_cycle_period": 8,
+"kl_cooldown_epochs": 2,
+"kl_cooldown_reduction": 0.25,
+"kl_beta_floor": 0.00005,
+"kl_floor_growth": 1.02
+```
+
 ### **TensorBoard Logging**
 - **Location**: `runs/ultra_high_quality_YYYYMMDD_HHMMSS/`
 - **View**: `tensorboard --logdir runs/ultra_high_quality_*`

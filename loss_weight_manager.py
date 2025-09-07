@@ -52,8 +52,18 @@ class LossWeightManager:
         self.kl_target_max = config.get('kl_target_max', 0.20)  # 20% maximum
         self.kl_adjustment_rate = config.get('kl_adjustment_rate', 0.1)  # 10% adjustment per epoch
         self.kl_initial_beta = config.get('kl_initial_beta', 0.001)  # Start with small beta
+        # Optional delay (in epochs) before applying any KL, to avoid early collapse
+        self.kl_delay_epochs = config.get('kl_delay_epochs', 0)
         self.current_beta = self.kl_initial_beta if self.adaptive_kl else 0.0
         self.kl_history = []
+        # Optional cyclical KL annealing (Bowman et al., 2016) with gentle rising floor
+        # Reference: Bowman, Samuel R., et al. "Generating Sentences from a Continuous Space." CoNLL 2016.
+        self.kl_cycle_enabled = config.get('kl_cycle_enabled', False)
+        self.kl_cycle_period = config.get('kl_cycle_period', 8)  # epochs per cycle
+        self.kl_cooldown_epochs = config.get('kl_cooldown_epochs', 2)  # early epochs in cycle for cooldown
+        self.kl_cooldown_reduction = config.get('kl_cooldown_reduction', 0.3)  # reduce beta by 30% during cooldown
+        self.kl_beta_floor = config.get('kl_beta_floor', self.kl_initial_beta)  # minimum beta floor
+        self.kl_floor_growth = config.get('kl_floor_growth', 1.02)  # floor grows 2% per cycle
         
         # Adaptive MSE/L1 control parameters
         self.adaptive_mse_l1 = config.get('adaptive_mse_l1_control', False)
@@ -84,6 +94,9 @@ class LossWeightManager:
         """Update current epoch for weight calculations."""
         self.current_epoch = epoch
         self.original_epoch = epoch
+        # On cycle boundary, gently raise the KL beta floor
+        if self.kl_cycle_enabled and self.current_epoch > 0 and (self.current_epoch % max(self.kl_cycle_period, 1) == 0):
+            self.kl_beta_floor = min(1.0, self.kl_beta_floor * self.kl_floor_growth)
     
     def update_kl_contribution(self, kl_contribution: float) -> None:
         """
@@ -106,17 +119,29 @@ class LossWeightManager:
         
         # Adjust beta weight based on KL contribution
         adjustment_rate = self.kl_adjustment_rate
+        # Under acceleration, speed reductions (when KL too high) but soften increases (when KL too low)
         if self.acceleration_active:
-            adjustment_rate *= self.acceleration_factor
-            
+            if avg_kl_contrib > self.kl_target_max:
+                adjustment_rate *= self.acceleration_factor
+            else:
+                adjustment_rate /= max(self.acceleration_factor, 1.0)
+        
         if avg_kl_contrib > self.kl_target_max:
             # KL too high, reduce beta
             self.current_beta *= (1.0 - adjustment_rate)
         elif avg_kl_contrib < self.kl_target_min:
-            # KL too low, increase beta
+            # KL too low, increase beta (possibly softened during acceleration)
             self.current_beta *= (1.0 + adjustment_rate)
         
-        # Ensure beta stays within reasonable bounds
+        # Apply cyclical cooldown early in each cycle to allow reconstruction to recover
+        if self.kl_cycle_enabled and self.current_epoch >= self.kl_delay_epochs:
+            cycle_pos = self.current_epoch % max(self.kl_cycle_period, 1)
+            if cycle_pos < self.kl_cooldown_epochs:
+                self.current_beta *= (1.0 - self.kl_cooldown_reduction)
+
+        # Enforce KL beta floor and bounds
+        if self.kl_cycle_enabled:
+            self.current_beta = max(self.kl_beta_floor, self.current_beta)
         self.current_beta = max(0.0, min(self.current_beta, 1.0))
     
     def update_mse_l1_contribution(self, mse_contribution: float, l1_contribution: float) -> None:
@@ -237,6 +262,12 @@ class LossWeightManager:
             raise ValueError(f"Unsupported loss type: {loss_type}. Supported types: {list(self.supported_losses.keys())}")
         
         if loss_type == 'beta' and self.adaptive_kl:
+            # Respect delay: return 0 until delay period has passed
+            if self.current_epoch < getattr(self, 'kl_delay_epochs', 0):
+                return 0.0
+            # Apply floor when cyclical annealing is enabled
+            if self.kl_cycle_enabled:
+                return max(self.kl_beta_floor, self.current_beta)
             return self.current_beta
         
         if loss_type == 'mse_weight' and self.adaptive_mse_l1:

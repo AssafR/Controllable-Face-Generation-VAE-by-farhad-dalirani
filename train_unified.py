@@ -18,6 +18,18 @@ from datetime import datetime
 import time
 import json
 
+# Ensure UTF-8 safe console output on Windows (avoid UnicodeEncodeError)
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    else:
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 # Perceptual loss is now isolated in perceptual_loss.py
 
 # TensorBoard support is now isolated in training_writer.py
@@ -52,6 +64,17 @@ class UnifiedVAETrainer:
         self.start_epoch = 0
         self.best_val_loss = float('inf')
         self.patience_counter = 0
+        # Fixed evaluation weights for early stopping/LR scheduling (stable across weight changes)
+        self.eval_weights = {
+            'mse': float(self.config.get('eval_mse', 1.0)),
+            'l1': float(self.config.get('eval_l1', 0.2)),
+            'perceptual': float(self.config.get('eval_perceptual', 0.01)),
+            'generation_quality': float(self.config.get('eval_generation', 0.001)),
+            'kl': float(self.config.get('eval_beta', 0.0)),
+        }
+        self.best_ref_val = float('inf')
+        # Track acceleration state to reset patience on activation/deactivation
+        self.prev_accel_active = False
         
         # Initialize centralized loss weight management
         self.loss_manager = LossWeightManager(config)
@@ -172,6 +195,7 @@ class UnifiedVAETrainer:
         
         # Convert tensor values to scalars for logging
         loss_dict_scalar = {
+            'loss': loss_dict['loss'].item(),
             'mse': loss_dict['mse'].item(),
             'l1': loss_dict['l1'].item(),
             'perceptual': loss_dict['perceptual'].item() if isinstance(loss_dict['perceptual'], torch.Tensor) else loss_dict['perceptual'],
@@ -394,8 +418,17 @@ class UnifiedVAETrainer:
                 # Validation phase
                 val_metrics = self.validate_epoch(val_loader, epoch)
             
+                # Compute reference evaluation loss (using fixed, non-displayed weights)
+                ref_val = (
+                    val_metrics.get('mse', 0) * self.eval_weights['mse'] +
+                    val_metrics.get('l1', 0) * self.eval_weights['l1'] +
+                    val_metrics.get('perceptual', 0) * self.eval_weights['perceptual'] +
+                    val_metrics.get('generation_quality', 0) * self.eval_weights['generation_quality'] +
+                    val_metrics.get('kl', 0) * self.eval_weights['kl']
+                )
+
                 # Learning rate scheduling
-                self.scheduler.step(val_metrics['loss'])
+                self.scheduler.step(ref_val)
                 current_lr = self.optimizer.param_groups[0]['lr']
                 
                 # Logging
@@ -442,6 +475,28 @@ class UnifiedVAETrainer:
                     gpu_utilization=gpu_utilization
                 )
                 print(summary)
+                
+                # Compact control summary: patience and acceleration state
+                accel_info = self.loss_manager.get_acceleration_info()
+                accel_on = 'on' if accel_info.get('active', False) else 'off'
+                accel_factor = accel_info.get('factor', 1.0)
+                print(f"  🔧 Control: Patience {self.patience_counter}/{early_stopping_patience} | Accel: {accel_on} ({accel_factor:.1f}x)")
+                
+                # If acceleration just activated/deactivated, reset early-stopping patience
+                accel_active = self.loss_manager.is_acceleration_active()
+                if accel_active != self.prev_accel_active:
+                    self.patience_counter = 0
+                    state = "activated" if accel_active else "deactivated"
+                    print(f"  ♻️ Early-stopping patience reset ({state})")
+                    # Optional: reduce LR when acceleration activates to help recovery
+                    if accel_active and self.config.get('lr_on_acceleration', False):
+                        factor = float(self.config.get('lr_accel_factor', 0.5))
+                        lr_min = float(self.config.get('lr_min', 1e-6))
+                        for g in self.optimizer.param_groups:
+                            g['lr'] = max(lr_min, g['lr'] * factor)
+                        new_lr = self.optimizer.param_groups[0]['lr']
+                        print(f"  🔻 Learning rate reduced on acceleration: {new_lr:.2e}")
+                    self.prev_accel_active = accel_active
             
                 # Overall training health
                 if len(self.loss_history.get('total', [])) > 3:
@@ -456,12 +511,12 @@ class UnifiedVAETrainer:
                 # Comprehensive loss behavior assessment
                 self.utilities.assess_loss_behavior(train_metrics, val_metrics, epoch)
                 
-                # Save best model
-                is_best = val_metrics['loss'] < self.best_val_loss
+                # Save best model using reference evaluation loss
+                is_best = ref_val < self.best_ref_val
                 if is_best:
-                    self.best_val_loss = val_metrics['loss']
+                    self.best_ref_val = ref_val
                     self.patience_counter = 0
-                    print(f"  ✅ New best model!")
+                    print(f"  ✅ New best model! (reference eval loss = {ref_val:.6f})")
                 else:
                     self.patience_counter += 1
                     print(f"  ⏳ No improvement ({self.patience_counter}/{early_stopping_patience})")
@@ -489,7 +544,7 @@ class UnifiedVAETrainer:
             total_time = time.time() - start_time
             print(f"\n🎉 Training completed!")
             print(f"  • Total time: {total_time/3600:.2f} hours")
-            print(f"  • Best validation loss: {self.best_val_loss:.6f}")
+            print(f"  • Best reference eval loss: {self.best_ref_val:.6f}")
             print(f"  • Final learning rate: {current_lr:.2e}")
             
             # Generate final test images

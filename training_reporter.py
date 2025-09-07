@@ -172,7 +172,8 @@ class TrainingReporter:
         if info['type'] == 'stage-based':
             return f"stage-based ({info['stage']})"
         elif info['type'] == 'scheduled':
-            return f"scheduled ({info['start']:.1f} → {info['end']:.1f})"
+            # Use higher precision so small scheduled values (e.g., 0.001) are visible
+            return f"scheduled ({info['start']:.4f} → {info['end']:.4f})"
         else:
             return 'fixed'
     
