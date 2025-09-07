@@ -182,83 +182,42 @@ class UnifiedVAETrainer:
         
         return total_loss, loss_dict_scalar
     
-    def train_epoch(self, train_loader, epoch):
-        """Train for one epoch."""
-        self.model.train()
-        train_loss = 0.0
-        train_mse = 0.0
-        train_kl = 0.0
-        train_l1 = 0.0
-        train_perceptual = 0.0
-        train_generation_quality = 0.0
+    def _process_epoch(self, data_loader, epoch, is_training=True):
+        """
+        Unified epoch processing for both training and validation.
         
-        train_pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{self.config['max_epoch']} [Train]", leave=False)
+        Args:
+            data_loader: DataLoader for the epoch
+            epoch: Current epoch number
+            is_training: Whether this is training (True) or validation (False)
+            
+        Returns:
+            Dictionary of averaged metrics
+        """
+        if is_training:
+            self.model.train()
+            mode = "Train"
+        else:
+            self.model.eval()
+            mode = "Val"
         
-        for batch_idx, images in enumerate(train_pbar):
-            images = images.to(self.device)
-            
-            self.optimizer.zero_grad()
-            
-            # Forward pass
-            emb_mean, emb_log_var, reconst = self.model(images)
-            
-            # Calculate losses
-            total_loss, loss_dict = self.calculate_losses(images, reconst, emb_mean, emb_log_var)
-            
-            # Backward pass
-            total_loss.backward()
-            
-            # Gradient clipping
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-            
-            self.optimizer.step()
-            
-            # Accumulate losses
-            train_loss += loss_dict['total']
-            train_mse += loss_dict['mse']
-            train_kl += loss_dict['kl']
-            train_l1 += loss_dict['l1']
-            train_perceptual += loss_dict['perceptual']
-            train_generation_quality += loss_dict['generation_quality']
-            
-            # Update progress bar
-            train_pbar.set_postfix({
-                'Loss': f'{total_loss.item():.5f}',
-                'MSE': f'{loss_dict["mse"]:.4f}',
-                'L1': f'{loss_dict["l1"]:.4f}',
-                'Perceptual': f'{loss_dict["perceptual"]:.4f}',
-                'GenQual': f'{loss_dict["generation_quality"]:.4f}',
-                'KL': f'{loss_dict["kl"]:.4f}'
-            })
-            
-            # Note: Mid-epoch samples are generated at the training loop level
-        
-        # Calculate averages
-        num_batches = len(train_loader)
-        return {
-            'loss': train_loss / num_batches,
-            'mse': train_mse / num_batches,
-            'kl': train_kl / num_batches,
-            'l1': train_l1 / num_batches,
-            'perceptual': train_perceptual / num_batches,
-            'generation_quality': train_generation_quality / num_batches
+        # Initialize accumulators
+        metrics = {
+            'loss': 0.0, 'mse': 0.0, 'kl': 0.0, 'l1': 0.0, 
+            'perceptual': 0.0, 'generation_quality': 0.0
         }
-    
-    def validate_epoch(self, val_loader, epoch):
-        """Validate for one epoch."""
-        self.model.eval()
-        val_loss = 0.0
-        val_mse = 0.0
-        val_kl = 0.0
-        val_l1 = 0.0
-        val_perceptual = 0.0
-        val_generation_quality = 0.0
         
-        with torch.no_grad():
-            val_pbar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{self.config['max_epoch']} [Val]", leave=False)
-            
-            for batch_idx, images in enumerate(val_pbar):
+        # Create progress bar
+        pbar = tqdm(data_loader, desc=f"Epoch {epoch+1}/{self.config['max_epoch']} [{mode}]", leave=False)
+        
+        # Process batches
+        with torch.no_grad() if not is_training else torch.enable_grad():
+            for batch_idx, images in enumerate(pbar):
                 images = images.to(self.device)
+                
+                if is_training:
+                    # Zero gradients for training
+                    self.optimizer.zero_grad()
                 
                 # Forward pass
                 emb_mean, emb_log_var, reconst = self.model(images)
@@ -266,32 +225,58 @@ class UnifiedVAETrainer:
                 # Calculate losses
                 total_loss, loss_dict = self.calculate_losses(images, reconst, emb_mean, emb_log_var)
                 
-                val_loss += loss_dict['total']
-                val_mse += loss_dict['mse']
-                val_kl += loss_dict['kl']
-                val_l1 += loss_dict['l1']
-                val_perceptual += loss_dict['perceptual']
-                val_generation_quality += loss_dict['generation_quality']
+                if is_training:
+                    # Backward pass and optimization for training
+                    total_loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                    self.optimizer.step()
                 
-                val_pbar.set_postfix({
-                    'Loss': f'{total_loss.item():.6f}',
-                    'MSE': f'{loss_dict["mse"]:.6f}',
-                    'L1': f'{loss_dict["l1"]:.6f}',
-                    'Perceptual': f'{loss_dict["perceptual"]:.6f}',
-                    'GenQual': f'{loss_dict["generation_quality"]:.6f}',
-                    'KL': f'{loss_dict["kl"]:.6f}'
-                })
+                # Accumulate losses
+                for key in metrics:
+                    metrics[key] += loss_dict[key]
+                
+                # Update progress bar with loss percentages
+                self._update_progress_bar(pbar, total_loss, loss_dict)
         
         # Calculate averages
-        num_batches = len(val_loader)
-        return {
-            'loss': val_loss / num_batches,
-            'mse': val_mse / num_batches,
-            'kl': val_kl / num_batches,
-            'l1': val_l1 / num_batches,
-            'perceptual': val_perceptual / num_batches,
-            'generation_quality': val_generation_quality / num_batches
+        num_batches = len(data_loader)
+        return {key: value / num_batches for key, value in metrics.items()}
+    
+    def _update_progress_bar(self, pbar, total_loss, loss_dict):
+        """Update progress bar with loss percentages."""
+        total_loss_val = total_loss.item()
+        
+        # Calculate weighted losses for percentage display
+        weighted_losses = {
+            'mse': loss_dict["mse"] * self.loss_manager.get_weight('mse_weight'),
+            'l1': loss_dict["l1"] * self.loss_manager.get_weight('l1_weight'),
+            'perceptual': loss_dict["perceptual"] * self.loss_manager.get_weight('perceptual_weight'),
+            'generation_quality': loss_dict["generation_quality"] * self.loss_manager.get_weight('generation_weight'),
+            'kl': loss_dict["kl"] * self.loss_manager.get_weight('beta')
         }
+        
+        # Calculate percentages
+        percentages = {}
+        for key, weighted_loss in weighted_losses.items():
+            percentages[key] = (weighted_loss / total_loss_val * 100) if total_loss_val > 0 else 0
+        
+        # Update progress bar
+        pbar.set_postfix({
+            'Loss': f'{total_loss_val:.4f}',
+            'MSE': f'{percentages["mse"]:.0f}%',
+            'L1': f'{percentages["l1"]:.0f}%',
+            'Perceptual': f'{percentages["perceptual"]:.0f}%',
+            'GenQual': f'{percentages["generation_quality"]:.0f}%',
+            'KL': f'{percentages["kl"]:.0f}%'
+        })
+    
+    def train_epoch(self, train_loader, epoch):
+        """Train for one epoch."""
+        return self._process_epoch(train_loader, epoch, is_training=True)
+    
+    def validate_epoch(self, val_loader, epoch):
+        """Validate for one epoch."""
+        return self._process_epoch(val_loader, epoch, is_training=False)
     
     # save_checkpoint moved to training_utilities.py
     

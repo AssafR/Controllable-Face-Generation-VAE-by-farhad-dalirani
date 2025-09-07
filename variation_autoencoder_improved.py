@@ -13,6 +13,8 @@ class Sampler(nn.Module):
     
     def forward(self, emb_mean, emb_log_var):
         # Use reparameterization trick to sample from the distribution
+        # Clamp log_var to prevent overflow in exp
+        emb_log_var = torch.clamp(emb_log_var, min=-10, max=10)
         noise = torch.randn_like(emb_mean)
         return emb_mean + torch.exp(0.5 * emb_log_var) * noise
 
@@ -209,16 +211,37 @@ class VAE_pt(nn.Module):
     def forward(self, inputs):
         """One forward pass for given inputs"""
         
+        # Debug: Check input for NaN
+        if torch.isnan(inputs).any():
+            print(f"⚠️  NaN detected in input images")
+            return torch.zeros_like(inputs), torch.zeros(inputs.size(0), self.embedding_size, device=inputs.device), torch.zeros_like(inputs)
+        
         # Feed input to encoder
         emb_mean, emb_log_var, emb_sampled = self.enc(inputs)
+        
+        # Debug: Check encoder outputs for NaN
+        if torch.isnan(emb_mean).any():
+            print(f"⚠️  NaN detected in emb_mean")
+        if torch.isnan(emb_log_var).any():
+            print(f"⚠️  NaN detected in emb_log_var")
+        if torch.isnan(emb_sampled).any():
+            print(f"⚠️  NaN detected in emb_sampled")
 
         # Reconstruct with decoder
         reconst = self.dec(emb_sampled)
+        
+        # Debug: Check reconstruction for NaN
+        if torch.isnan(reconst).any():
+            print(f"⚠️  NaN detected in reconstructions")
 
         return emb_mean, emb_log_var, reconst
 
     def kl_loss(self, emb_mean, emb_log_var):
-        """Calculate KL divergence loss"""
+        """Calculate KL divergence loss (numerically stable)"""
+        # Use numerically stable KL divergence calculation
+        # KL = 0.5 * sum(1 + log_var - mean^2 - exp(log_var))
+        # Clamp log_var to prevent overflow
+        emb_log_var = torch.clamp(emb_log_var, min=-10, max=10)
         return torch.mean(torch.sum(
             -0.5 * (1 + emb_log_var - emb_mean.pow(2) - emb_log_var.exp()), 
             dim=1))

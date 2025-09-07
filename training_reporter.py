@@ -241,31 +241,76 @@ class TrainingReporter:
         lines.append(f"\n🔍 LOSS BREAKDOWN:")
         lines.append(f"{'─'*40}")
         
-        analysis = self.get_loss_contribution_analysis(train_metrics)
         health_status = self.get_health_status(train_metrics)
+        total_loss = train_metrics.get('loss', 0)
         
-        # Display each loss component with status
-        for loss_type, data in analysis.items():
-            icon = self.get_loss_icon(loss_type)
-            raw_value = data['raw_value']
-            contribution = data['contribution_percent']
-            display_name = self.get_loss_display_name(loss_type)
+        # Show all loss components with proper weighting
+        loss_components = {
+            'mse': ('📐', 'MSE', 'mse_weight'),
+            'l1': ('📏', 'L1', 'l1_weight'),
+            'perceptual': ('🎨', 'Perceptual', 'perceptual_weight'),
+            'generation_quality': ('🎯', 'Generation', 'generation_weight')
+        }
+        
+        # Display each loss component with proper weighting
+        for loss_key, (icon, display_name, weight_key) in loss_components.items():
+            if loss_key in train_metrics:
+                raw_value = train_metrics[loss_key]
+                weight = self.loss_manager.get_weight(weight_key)
+                weighted_value = raw_value * weight
+                contribution = (weighted_value / total_loss) * 100 if total_loss > 0 else 0
+                
+                # Get health status for this loss type
+                if loss_key in health_status:
+                    status_icon = self.get_status_icon(health_status[loss_key]['status'])
+                    lines.append(f"  {status_icon} {icon} {display_name:<12} {raw_value:.4f} (raw) × {weight:.3f} = {weighted_value:.4f} ({contribution:.0f}% of total)")
+                else:
+                    lines.append(f"  ✅ {icon} {display_name:<12} {raw_value:.4f} (raw) × {weight:.3f} = {weighted_value:.4f} ({contribution:.0f}% of total)")
+        
+        # Show reconstruction total
+        if 'recon_loss' in train_metrics:
+            recon_value = train_metrics['recon_loss']
+            recon_contrib = (recon_value / total_loss) * 100 if total_loss > 0 else 0
+            lines.append(f"  ✅ 🔄 Recon Total    {recon_value:.4f} ({recon_contrib:.0f}% of total)")
+        
+        # Update adaptive MSE/L1 control
+        if 'mse' in train_metrics and 'l1' in train_metrics:
+            mse_value = train_metrics['mse']
+            l1_value = train_metrics['l1']
+            mse_weight = self.loss_manager.get_weight('mse_weight')
+            l1_weight = self.loss_manager.get_weight('l1_weight')
+            mse_weighted = mse_value * mse_weight
+            l1_weighted = l1_value * l1_weight
+            mse_contrib = (mse_weighted / total_loss) * 100 if total_loss > 0 else 0
+            l1_contrib = (l1_weighted / total_loss) * 100 if total_loss > 0 else 0
             
-            # Get health status for this loss type
-            health_key = loss_type.replace('_weight', '')
-            if health_key in health_status:
-                status_icon = self.get_status_icon(health_status[health_key]['status'])
-                lines.append(f"  {status_icon} {icon} {display_name:<12} {raw_value:.4f} ({contribution:.0f}% of total)")
-            else:
-                lines.append(f"  ✅ {icon} {display_name:<12} {raw_value:.4f} ({contribution:.0f}% of total)")
+            # Update adaptive MSE/L1 control
+            self.loss_manager.update_mse_l1_contribution(mse_contrib / 100.0, l1_contrib / 100.0)
         
-        # KL divergence - special handling
+        # Check for stuck training and accelerate scheduled updates if needed
+        acceleration_applied = self.loss_manager.check_stuck_training(total_loss)
+        if acceleration_applied:
+            print(f"  ⚡ Schedule acceleration activated - weights will update faster")
+        
+        # Show acceleration status in summary
+        if self.loss_manager.is_acceleration_active():
+            accel_info = self.loss_manager.get_acceleration_info()
+            print(f"  ⚡ Acceleration: {accel_info['factor']:.1f}x speed (stuck {accel_info['stuck_epochs']}/{accel_info['patience']} epochs)")
+        
+        # KL divergence - special handling with beta weight
         kl_value = train_metrics.get('kl', 0)
         beta_weight = self.loss_manager.get_weight('beta')
-        kl_contrib = (kl_value * beta_weight) / train_metrics['loss'] * 100 if train_metrics['loss'] > 0 else 0
+        kl_weighted = kl_value * beta_weight
+        kl_contrib = (kl_weighted / total_loss) * 100 if total_loss > 0 else 0
+        
+        # Update adaptive KL control
+        self.loss_manager.update_kl_contribution(kl_contrib / 100.0)  # Convert percentage to fraction
+        
         if 'kl' in health_status:
             status_icon = self.get_status_icon(health_status['kl']['status'])
-            lines.append(f"  {status_icon} 🔄 KL:           {kl_value:.4f} ({kl_contrib:.0f}% of total)")
+            lines.append(f"  {status_icon} 🔄 KL:           {kl_value:.4f} (raw) × {beta_weight:.3f} = {kl_weighted:.4f} ({kl_contrib:.0f}% of total)")
+        else:
+            lines.append(f"  ✅ 🔄 KL:           {kl_value:.4f} (raw) × {beta_weight:.3f} = {kl_weighted:.4f} ({kl_contrib:.0f}% of total)")
         
         # Quick health check
         lines.append(f"\n🏥 QUICK HEALTH CHECK:")

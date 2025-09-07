@@ -63,7 +63,8 @@ class ConfigurationManager:
         
         # Generation quality breakdown (if enabled)
         if loss_config.get('use_generation_quality', False):
-            gen_qual_weights = self._get_generation_quality_weights()
+            # Use default weights for display (actual weights managed by LossWeightManager)
+            gen_qual_weights = {'edge': 0.4, 'diversity': 0.3, 'contrast': 0.3}
             print(f"  • GenQual breakdown: Edge ({gen_qual_weights['edge']:.0%}), Diversity ({gen_qual_weights['diversity']:.0%}), Contrast ({gen_qual_weights['contrast']:.0%})")
         
         # Beta configuration
@@ -103,32 +104,6 @@ class ConfigurationManager:
             print(f"  • GPU: {gpu_name} ({gpu_memory:.1f}GB)")
         else:
             print(f"  • GPU: Not available")
-    
-    def _get_generation_quality_weights(self) -> Dict[str, float]:
-        """Get generation quality component weights from config or defaults."""
-        # Check if custom weights are specified in config
-        gen_qual_config = self.config.get('generation_quality_config', {})
-        
-        # Default weights (matching loss_calculator.py)
-        default_weights = {
-            'edge': 0.4,
-            'diversity': 0.3,
-            'contrast': 0.3
-        }
-        
-        # Use config values if available, otherwise defaults
-        weights = {
-            'edge': gen_qual_config.get('edge_weight', default_weights['edge']),
-            'diversity': gen_qual_config.get('diversity_weight', default_weights['diversity']),
-            'contrast': gen_qual_config.get('contrast_weight', default_weights['contrast'])
-        }
-        
-        # Normalize weights to ensure they sum to 1.0
-        total = sum(weights.values())
-        if total > 0:
-            weights = {k: v / total for k, v in weights.items()}
-        
-        return weights
 
 
 class CheckpointManager:
@@ -403,8 +378,8 @@ class TrainingUtilities:
         if train_metrics.get('kl', 0) < 0.001:
             issues.append("KL collapse detected (KL loss very low)")
         
-        # Check for perceptual loss issues
-        if train_metrics.get('perceptual', 0) > 10:
+        # Check for perceptual loss issues (use higher threshold since raw values are large)
+        if train_metrics.get('perceptual', 0) > 50:  # Increased from 10 to 50
             issues.append("High perceptual loss (may need weight adjustment)")
         
         # Report issues
