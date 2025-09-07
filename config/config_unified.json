@@ -231,6 +231,110 @@
             "perceptual_start": 0.0,
             "perceptual_end": 0.15,
             "perceptual_warmup_epochs": 35
+        },
+        
+        "stage_based_training": {
+            "_description": "Automatic stage-based training - no manual tweaking required",
+            "_use_case": "Production use, automatic progression through training stages",
+            "_pros": "Automatic stage progression, no manual tuning, optimal for all training phases",
+            "_cons": "More complex configuration, requires understanding of stages",
+            "use_mse": true,
+            "use_l1": true,
+            "use_perceptual_loss": true,
+            "use_lpips": false,
+            "use_generation_quality": true,
+            "stage_based_training": true,
+            "generation_quality_config": {
+                "edge_weight": 0.4,
+                "diversity_weight": 0.3,
+                "contrast_weight": 0.3
+            },
+            "stages": {
+                "reconstruction": {
+                    "epochs": [0, 20],
+                    "mse_weight": 0.9,
+                    "l1_weight": 0.1,
+                    "perceptual_weight": 0.0,
+                    "generation_weight": 0.0,
+                    "beta": 0.5
+                },
+                "perceptual_introduction": {
+                    "epochs": [20, 50],
+                    "mse_weight": 0.6,
+                    "l1_weight": 0.2,
+                    "perceptual_weight": 0.2,
+                    "generation_weight": 0.0,
+                    "beta": 1.0
+                },
+                "quality_enhancement": {
+                    "epochs": [50, 80],
+                    "mse_weight": 0.4,
+                    "l1_weight": 0.2,
+                    "perceptual_weight": 0.3,
+                    "generation_weight": 0.1,
+                    "beta": 1.5
+                },
+                "final_polish": {
+                    "epochs": [80, 100],
+                    "mse_weight": 0.3,
+                    "l1_weight": 0.15,
+                    "perceptual_weight": 0.4,
+                    "generation_weight": 0.15,
+                    "beta": 2.0
+                }
+            }
+        },
+        
+        "fast_stage_based": {
+            "_description": "Fast stage-based training - optimized for speed",
+            "_use_case": "Quick training with automatic stage progression",
+            "_pros": "Fast training, automatic stages, good quality",
+            "_cons": "May sacrifice some final quality for speed",
+            "use_mse": true,
+            "use_l1": true,
+            "use_perceptual_loss": true,
+            "use_lpips": false,
+            "use_generation_quality": true,
+            "stage_based_training": true,
+            "generation_quality_config": {
+                "edge_weight": 0.4,
+                "diversity_weight": 0.3,
+                "contrast_weight": 0.3
+            },
+            "stages": {
+                "reconstruction": {
+                    "epochs": [0, 15],
+                    "mse_weight": 0.9,
+                    "l1_weight": 0.1,
+                    "perceptual_weight": 0.0,
+                    "generation_weight": 0.0,
+                    "beta": 0.5
+                },
+                "perceptual_introduction": {
+                    "epochs": [15, 35],
+                    "mse_weight": 0.6,
+                    "l1_weight": 0.2,
+                    "perceptual_weight": 0.2,
+                    "generation_weight": 0.0,
+                    "beta": 1.0
+                },
+                "quality_enhancement": {
+                    "epochs": [35, 60],
+                    "mse_weight": 0.4,
+                    "l1_weight": 0.2,
+                    "perceptual_weight": 0.3,
+                    "generation_weight": 0.1,
+                    "beta": 1.5
+                },
+                "final_polish": {
+                    "epochs": [60, 80],
+                    "mse_weight": 0.3,
+                    "l1_weight": 0.15,
+                    "perceptual_weight": 0.4,
+                    "generation_weight": 0.15,
+                    "beta": 2.0
+                }
+            }
         }
     },
     

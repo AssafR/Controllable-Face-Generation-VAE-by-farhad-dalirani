@@ -173,3 +173,113 @@ def get_file_info(file_path: str) -> dict:
         "modified": datetime.fromtimestamp(stat.st_mtime),
         "modified_str": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
     }
+
+
+def validate_config_structure(config: dict, required_keys: list) -> list:
+    """
+    Validate that a configuration dictionary contains all required keys.
+    
+    Args:
+        config: Configuration dictionary to validate
+        required_keys: List of required key names
+        
+    Returns:
+        List of missing keys (empty if all present)
+    """
+    missing_keys = []
+    for key in required_keys:
+        if key not in config:
+            missing_keys.append(key)
+    return missing_keys
+
+
+def deep_merge_dicts(dict1: dict, dict2: dict) -> dict:
+    """
+    Deep merge two dictionaries, with dict2 values taking precedence.
+    
+    Args:
+        dict1: Base dictionary
+        dict2: Dictionary to merge in (takes precedence)
+        
+    Returns:
+        Merged dictionary
+    """
+    result = dict1.copy()
+    
+    for key, value in dict2.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = deep_merge_dicts(result[key], value)
+        else:
+            result[key] = value
+    
+    return result
+
+
+def get_nested_value(data: dict, key_path: str, default=None, separator: str = '.'):
+    """
+    Get a value from a nested dictionary using dot notation.
+    
+    Args:
+        data: Dictionary to search in
+        key_path: Dot-separated path to the key (e.g., 'loss_config.mse_weight')
+        default: Default value if key not found
+        separator: Separator character for key path
+        
+    Returns:
+        Value at the specified path or default
+    """
+    keys = key_path.split(separator)
+    current = data
+    
+    for key in keys:
+        if isinstance(current, dict) and key in current:
+            current = current[key]
+        else:
+            return default
+    
+    return current
+
+
+def set_nested_value(data: dict, key_path: str, value, separator: str = '.'):
+    """
+    Set a value in a nested dictionary using dot notation.
+    
+    Args:
+        data: Dictionary to modify
+        key_path: Dot-separated path to the key (e.g., 'loss_config.mse_weight')
+        value: Value to set
+        separator: Separator character for key path
+    """
+    keys = key_path.split(separator)
+    current = data
+    
+    # Navigate to the parent of the target key
+    for key in keys[:-1]:
+        if key not in current:
+            current[key] = {}
+        current = current[key]
+    
+    # Set the final value
+    current[keys[-1]] = value
+
+
+def print_config_summary(config: dict, title: str = "Configuration Summary") -> None:
+    """
+    Print a formatted summary of a configuration dictionary.
+    
+    Args:
+        config: Configuration dictionary to summarize
+        title: Title for the summary
+    """
+    print(f"\n{title}")
+    print("=" * len(title))
+    
+    def print_dict(data, indent=0):
+        for key, value in data.items():
+            if isinstance(value, dict):
+                print("  " * indent + f"{key}:")
+                print_dict(value, indent + 1)
+            else:
+                print("  " * indent + f"{key}: {value}")
+    
+    print_dict(config)
