@@ -51,16 +51,20 @@
         "perceptual": {
             "_description": "MSE + L1 + Perceptual loss - high quality with realistic textures",
             "_use_case": "High quality generation, better textures",
-            "_pros": "Realistic textures, better high-level features",
+            "_pros": "Realistic textures, better high-level features, stable training",
             "_cons": "Slower training, more memory usage",
             "use_mse": true,
             "use_l1": true,
             "use_perceptual_loss": true,
             "use_lpips": false,
-            "mse_weight": 0.6,
+            "mse_weight": 0.4,
             "l1_weight": 0.2,
-            "perceptual_weight": 0.2,
-            "lpips_weight": 0.0
+            "perceptual_weight": 0.4,
+            "lpips_weight": 0.0,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.4,
+            "perceptual_warmup_epochs": 20
         },
         
         "lpips": {
@@ -96,23 +100,27 @@
         "high_quality": {
             "_description": "High quality configuration - best balance of all losses",
             "_use_case": "Production use, best quality without LPIPS",
-            "_pros": "High quality, good textures, sharp details",
+            "_pros": "High quality, good textures, sharp details, stable training",
             "_cons": "Slower than basic configs",
             "use_mse": true,
             "use_l1": true,
             "use_perceptual_loss": true,
             "use_lpips": false,
-            "mse_weight": 0.1,
-            "l1_weight": 0.05,
-            "perceptual_weight": 0.6,
+            "mse_weight": 0.3,
+            "l1_weight": 0.15,
+            "perceptual_weight": 0.3,
             "generation_weight": 0.25,
-            "lpips_weight": 0.0
+            "lpips_weight": 0.0,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.3,
+            "perceptual_warmup_epochs": 30
         },
         
         "high_diversity": {
             "_description": "High diversity configuration - emphasizes generation quality and diversity",
             "_use_case": "Experiments requiring high variation, creative generation",
-            "_pros": "High diversity, sharp edges, good contrast",
+            "_pros": "High diversity, sharp edges, good contrast, stable training",
             "_cons": "May sacrifice some reconstruction accuracy",
             "use_mse": true,
             "use_l1": true,
@@ -120,30 +128,38 @@
             "use_lpips": false,
             "mse_weight": 0.2,
             "l1_weight": 0.1,
-            "perceptual_weight": 0.3,
-            "generation_weight": 0.4,
-            "lpips_weight": 0.0
+            "perceptual_weight": 0.4,
+            "generation_weight": 0.3,
+            "lpips_weight": 0.0,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.4,
+            "perceptual_warmup_epochs": 25
         },
         
         "ultra_high_quality_loss": {
             "_description": "Ultra high quality loss - best possible perceptual quality",
             "_use_case": "Research, best possible quality, production",
-            "_pros": "Best perceptual quality, realistic textures, sharp details",
+            "_pros": "Best perceptual quality, realistic textures, sharp details, stable training",
             "_cons": "Slowest training, highest memory usage",
             "use_mse": true,
             "use_l1": true,
             "use_perceptual_loss": true,
             "use_lpips": true,
-            "mse_weight": 0.4,
+            "mse_weight": 0.3,
             "l1_weight": 0.2,
-            "perceptual_weight": 0.2,
-            "lpips_weight": 0.2
+            "perceptual_weight": 0.3,
+            "lpips_weight": 0.2,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.3,
+            "perceptual_warmup_epochs": 35
         },
         
         "full_retrain_optimal": {
             "_description": "Optimal configuration for full retraining from scratch",
             "_use_case": "Fresh training with balanced loss weights to prevent posterior collapse",
-            "_pros": "Prevents blurry images, good diversity, sharp details",
+            "_pros": "Prevents blurry images, good diversity, sharp details, stable training",
             "_cons": "Requires full retraining",
             "use_mse": true,
             "use_l1": true,
@@ -152,7 +168,69 @@
             "mse_weight": 0.15,
             "l1_weight": 0.05,
             "perceptual_weight": 0.8,
-            "lpips_weight": 0.0
+            "lpips_weight": 0.0,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.8,
+            "perceptual_warmup_epochs": 30
+        },
+        
+        "perceptual_scheduled": {
+            "_description": "Perceptual loss with warmup scheduling - prevents early perceptual domination",
+            "_use_case": "High quality training with controlled perceptual loss introduction",
+            "_pros": "Prevents posterior collapse, stable training, high quality results",
+            "_cons": "More complex configuration, requires tuning",
+            "use_mse": true,
+            "use_l1": true,
+            "use_perceptual_loss": true,
+            "use_lpips": false,
+            "mse_weight": 0.3,
+            "l1_weight": 0.1,
+            "perceptual_weight": 0.6,
+            "lpips_weight": 0.0,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.6,
+            "perceptual_warmup_epochs": 20
+        },
+        
+        "balanced_scheduled": {
+            "_description": "Balanced loss with both beta and perceptual scheduling",
+            "_use_case": "Optimal training with both KL and perceptual loss control",
+            "_pros": "Prevents both posterior collapse and perceptual domination",
+            "_cons": "Most complex configuration",
+            "use_mse": true,
+            "use_l1": true,
+            "use_perceptual_loss": true,
+            "use_lpips": false,
+            "mse_weight": 0.4,
+            "l1_weight": 0.2,
+            "perceptual_weight": 0.2,
+            "lpips_weight": 0.0,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.2,
+            "perceptual_warmup_epochs": 30
+        },
+        
+        "conservative_high_quality": {
+            "_description": "Conservative high quality - prevents perceptual domination",
+            "_use_case": "Fixes posterior collapse and perceptual domination issues",
+            "_pros": "Very stable training, prevents perceptual domination, good reconstruction",
+            "_cons": "May be slower to achieve high perceptual quality",
+            "use_mse": true,
+            "use_l1": true,
+            "use_perceptual_loss": true,
+            "use_lpips": false,
+            "mse_weight": 0.5,
+            "l1_weight": 0.3,
+            "perceptual_weight": 0.15,
+            "generation_weight": 0.05,
+            "lpips_weight": 0.0,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.15,
+            "perceptual_warmup_epochs": 35
         }
     },
     
@@ -188,7 +266,14 @@
             "_use_case": "Best quality, research, production",
             "max_epoch": 100,
             "batch_size": 128,
-            "lr": 0.0001
+            "lr": 0.0001,
+            "beta_schedule": true,
+            "beta_start": 0.1,
+            "beta_end": 2.0,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.3,
+            "perceptual_warmup_epochs": 30
         },
         
         "ultra_high_quality_training": {
@@ -196,7 +281,11 @@
             "_use_case": "Best possible quality, research, production",
             "max_epoch": 200,
             "batch_size": 64,
-            "lr": 0.00005
+            "lr": 0.00005,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.6,
+            "perceptual_warmup_epochs": 40
         },
         
         "fast_high_quality_training": {
@@ -204,7 +293,11 @@
             "_use_case": "High quality with optimal training speed on RTX 3090",
             "max_epoch": 100,
             "batch_size": 256,
-            "lr": 0.0002
+            "lr": 0.0002,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.6,
+            "perceptual_warmup_epochs": 25
         },
         
         "beta_scheduled_training": {
@@ -215,7 +308,11 @@
             "lr": 0.0001,
             "beta_schedule": true,
             "beta_start": 0.1,
-            "beta_end": 2.0
+            "beta_end": 2.0,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.6,
+            "perceptual_warmup_epochs": 25
         },
         
         "balanced_high_quality_training": {
@@ -223,7 +320,11 @@
             "_use_case": "Good quality-speed balance",
             "max_epoch": 150,
             "batch_size": 96,
-            "lr": 0.000075
+            "lr": 0.000075,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.6,
+            "perceptual_warmup_epochs": 30
         },
         
         "compact_high_quality_training": {
@@ -231,7 +332,11 @@
             "_use_case": "Fast training with good quality",
             "max_epoch": 80,
             "batch_size": 256,
-            "lr": 0.0002
+            "lr": 0.0002,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.6,
+            "perceptual_warmup_epochs": 20
         },
         
         "full_retrain_training": {
@@ -239,7 +344,26 @@
             "_use_case": "Complete retraining from scratch with optimal parameters",
             "max_epoch": 150,
             "batch_size": 128,
-            "lr": 0.0001
+            "lr": 0.0001,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.6,
+            "perceptual_warmup_epochs": 30
+        },
+        
+        "scheduled_training": {
+            "_description": "Scheduled training with both beta and perceptual loss warmup",
+            "_use_case": "Optimal training with controlled loss introduction",
+            "max_epoch": 120,
+            "batch_size": 128,
+            "lr": 0.0001,
+            "beta_schedule": true,
+            "beta_start": 0.1,
+            "beta_end": 1.5,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.6,
+            "perceptual_warmup_epochs": 30
         }
     },
     

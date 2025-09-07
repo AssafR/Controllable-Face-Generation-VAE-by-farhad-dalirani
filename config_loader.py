@@ -70,7 +70,18 @@ class ConfigLoader:
             loss_config = self.unified_config["loss_presets"][loss_preset]
             # Filter out documentation fields
             loss_config = {k: v for k, v in loss_config.items() if not k.startswith('_')}
-            config["loss_config"] = loss_config
+            
+            # Separate loss-specific config from general config
+            loss_specific_keys = ['use_mse', 'use_l1', 'use_perceptual_loss', 'use_lpips', 
+                                'mse_weight', 'l1_weight', 'perceptual_weight', 'generation_weight', 'lpips_weight']
+            
+            # Put loss-specific keys in loss_config
+            config["loss_config"] = {k: v for k, v in loss_config.items() if k in loss_specific_keys}
+            
+            # Put general config keys (like perceptual scheduling) at top level
+            general_keys = [k for k in loss_config.keys() if k not in loss_specific_keys]
+            for key in general_keys:
+                config[key] = loss_config[key]
         else:
             print(f"⚠️  Loss preset '{loss_preset}' not found, using base config")
             config["loss_config"] = {}

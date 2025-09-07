@@ -42,6 +42,7 @@ from tqdm import tqdm
 from variation_autoencoder_improved import VAE_pt
 from utilities_pytorch import get_split_data, configure_gpu, display_image_grid, display_comparison_grid
 from config_loader import ConfigLoader
+from utils import FilenameManager, create_directories, safe_remove_file
 
 class VGGPerceptualLoss(nn.Module):
     """Memory-optimized VGG-based perceptual loss."""
@@ -241,9 +242,7 @@ class UnifiedVAETrainer:
     def setup_logging(self):
         """Setup TensorBoard logging."""
         if TENSORBOARD_AVAILABLE:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            config_name = self.config.get('config_name', 'unified')
-            log_dir = f"runs/{config_name}_{timestamp}"
+            log_dir = self.get_filename('log_dir')
             self.writer = SummaryWriter(log_dir)
             print(f"  • Logging: {log_dir}")
         else:
@@ -268,6 +267,31 @@ class UnifiedVAETrainer:
             current_beta = self.config.get('beta', 1.0)
         
         return current_beta
+    
+    def get_current_perceptual_weight(self):
+        """Get current perceptual loss weight with optional warmup scheduling."""
+        if not hasattr(self, 'current_epoch'):
+            self.current_epoch = 0
+        
+        # Check if perceptual scheduling is enabled
+        if self.config.get('perceptual_schedule', False):
+            perceptual_start = self.config.get('perceptual_start', 0.0)
+            perceptual_end = self.config.get('perceptual_end', 0.6)
+            warmup_epochs = self.config.get('perceptual_warmup_epochs', 20)
+            
+            if self.current_epoch < warmup_epochs:
+                # Warmup phase: gradually increase from start to end
+                progress = self.current_epoch / warmup_epochs
+                current_perceptual_weight = perceptual_start + (perceptual_end - perceptual_start) * progress
+            else:
+                # After warmup: use final weight
+                current_perceptual_weight = perceptual_end
+        else:
+            # No scheduling: use fixed weight from config
+            loss_config = self.config.get('loss_config', {})
+            current_perceptual_weight = loss_config.get('perceptual_weight', 0.0)
+        
+        return current_perceptual_weight
     
     def create_model(self):
         """Create and configure the VAE model."""
@@ -475,12 +499,14 @@ class UnifiedVAETrainer:
         # Generation quality loss (encourages diverse, sharp generated images)
         generation_quality_loss = self.calculate_generation_quality_loss(reconst)
         
-        # Get loss weights
+        # Get loss weights from config
         loss_config = self.config.get('loss_config', {})
-        mse_weight = loss_config.get('mse_weight', 0.5)
-        l1_weight = loss_config.get('l1_weight', 0.3)
-        perceptual_weight = loss_config.get('perceptual_weight', 0.2)
-        generation_weight = loss_config.get('generation_weight', 0.1)  # New weight for generation quality
+        mse_weight = loss_config.get('mse_weight', 0.0)
+        l1_weight = loss_config.get('l1_weight', 0.0)
+        generation_weight = loss_config.get('generation_weight', 0.0)
+        
+        # Get current perceptual weight (with scheduling if enabled)
+        perceptual_weight = self.get_current_perceptual_weight()
         
         # Combine reconstruction losses
         recon_loss = (mse_weight * mse_loss + 
@@ -557,6 +583,8 @@ class UnifiedVAETrainer:
                 'GenQual': f'{loss_dict["generation_quality"]:.4f}',
                 'KL': f'{loss_dict["kl"]:.4f}'
             })
+            
+            # Note: Mid-epoch samples are generated at the training loop level
         
         # Calculate averages
         num_batches = len(train_loader)
@@ -634,20 +662,19 @@ class UnifiedVAETrainer:
         }
         
         # Save regular checkpoint
-        config_name = self.config.get('config_name', 'unified')
-        checkpoint_path = os.path.join(checkpoint_dir, f"{config_name}_training_checkpoint.pth")
+        checkpoint_path = self.get_filename('checkpoint')
         torch.save(checkpoint, checkpoint_path)
         
         # Save best model
         if is_best:
             os.makedirs(self.config['model_save_path'], exist_ok=True)
-            best_model_path = f"{self.config['model_save_path']}/{config_name}_vae_best_model.pth"
+            best_model_path = self.get_filename('best_model')
             torch.save(self.model.state_dict(), best_model_path)
             print(f"  ✅ New best model saved: {best_model_path}")
         
         # Save periodic checkpoint
         if (epoch + 1) % 10 == 0:
-            periodic_path = os.path.join(checkpoint_dir, f"{config_name}_checkpoint_epoch_{epoch+1:03d}.pth")
+            periodic_path = self.get_filename('periodic_checkpoint', epoch=epoch+1)
             torch.save(checkpoint, periodic_path)
             print(f"  💾 Periodic checkpoint saved: {periodic_path}")
     
@@ -676,9 +703,51 @@ class UnifiedVAETrainer:
             print("🆕 No checkpoint found, starting fresh training")
             return False
     
+    def get_filename(self, file_type, epoch=None, suffix="", extension="png"):
+        """
+        Centralized filename generation for all training files.
+        
+        Args:
+            file_type: Type of file ('checkpoint', 'best_model', 'periodic_checkpoint', 
+                      'generated_samples', 'reconstruction_samples', 'final_samples', 'log_dir')
+            epoch: Epoch number (for epoch-specific files)
+            suffix: Additional suffix (e.g., '_mid_epoch')
+            extension: File extension ('png', 'pth')
+            
+        Returns:
+            Complete file path
+        """
+        config_name = self.config.get('config_name', 'unified')
+        
+        if file_type == 'checkpoint':
+            return os.path.join("checkpoints", f"{config_name}_training_checkpoint.pth")
+        elif file_type == 'best_model':
+            return os.path.join(self.config['model_save_path'], f"{config_name}_vae_best_model.pth")
+        elif file_type == 'periodic_checkpoint':
+            return os.path.join("checkpoints", f"{config_name}_checkpoint_epoch_{epoch:03d}.pth")
+        elif file_type == 'generated_samples':
+            return os.path.join("sample_images", f"{config_name}_generated_epoch_{epoch:03d}{suffix}.png")
+        elif file_type == 'reconstruction_samples':
+            return os.path.join("sample_images", f"{config_name}_reconstruction_epoch_{epoch:03d}{suffix}.png")
+        elif file_type == 'final_samples':
+            return f"{config_name}_final_samples.png"
+        elif file_type == 'log_dir':
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            return f"runs/{config_name}_{timestamp}"
+        else:
+            raise ValueError(f"Unknown file_type: {file_type}")
+    
+    def get_config_prefix(self):
+        """Get the config prefix for file matching."""
+        return f"{self.config.get('config_name', 'unified')}_"
+    
     def clear_old_files(self):
-        """Clear old training files for fresh training (only PNG files)."""
+        """Clear old training files for fresh training (only PNG files with current config prefix)."""
         print("🧹 Clearing old training files for fresh training...")
+        
+        # Get current config prefix to identify files to delete
+        config_prefix = self.get_config_prefix()
+        print(f"  🔍 Looking for files with prefix: {config_prefix}")
         
         # Check what will be deleted
         files_to_delete = []
@@ -686,20 +755,27 @@ class UnifiedVAETrainer:
         model_dir = self.config['model_save_path']
         sample_dir = "sample_images"
         
-        # Count PNG files only
-        png_count = 0
+        # Count PNG files that match current config prefix
+        matching_files = []
         if os.path.exists(checkpoint_dir):
-            png_files = [f for f in os.listdir(checkpoint_dir) if f.endswith('.png')]
-            png_count += len(png_files)
-        if os.path.exists(model_dir):
-            png_files = [f for f in os.listdir(model_dir) if f.endswith('.png')]
-            png_count += len(png_files)
-        if os.path.exists(sample_dir):
-            png_files = [f for f in os.listdir(sample_dir) if f.endswith('.png')]
-            png_count += len(png_files)
+            for file in os.listdir(checkpoint_dir):
+                if file.endswith('.png') and file.startswith(config_prefix):
+                    matching_files.append(os.path.join(checkpoint_dir, file))
         
-        if png_count > 0:
-            print(f"  📁 Will delete {png_count} PNG files from training directories")
+        if os.path.exists(model_dir):
+            for file in os.listdir(model_dir):
+                if file.endswith('.png') and file.startswith(config_prefix):
+                    matching_files.append(os.path.join(model_dir, file))
+        
+        if os.path.exists(sample_dir):
+            for file in os.listdir(sample_dir):
+                if file.endswith('.png') and file.startswith(config_prefix):
+                    matching_files.append(os.path.join(sample_dir, file))
+        
+        if matching_files:
+            print(f"  📁 Will delete {len(matching_files)} PNG files with current config prefix:")
+            for file in matching_files:
+                print(f"    • {os.path.basename(file)}")
             
             # Ask for confirmation
             response = input("  ❓ Continue? This will permanently delete old training images (y/N): ").strip().lower()
@@ -708,31 +784,19 @@ class UnifiedVAETrainer:
                 import sys
                 sys.exit(0)
         else:
-            print("  ℹ️  No old PNG files found to delete.")
+            print("  ℹ️  No old PNG files found with current config prefix to delete.")
         
-        # Clear only PNG files from directories
+        # Clear only PNG files that match current config prefix
         deleted_count = 0
-        
-        if os.path.exists(checkpoint_dir):
-            for file in os.listdir(checkpoint_dir):
-                if file.endswith('.png'):
-                    os.remove(os.path.join(checkpoint_dir, file))
-                    deleted_count += 1
-        
-        if os.path.exists(model_dir):
-            for file in os.listdir(model_dir):
-                if file.endswith('.png'):
-                    os.remove(os.path.join(model_dir, file))
-                    deleted_count += 1
-        
-        if os.path.exists(sample_dir):
-            for file in os.listdir(sample_dir):
-                if file.endswith('.png'):
-                    os.remove(os.path.join(sample_dir, file))
-                    deleted_count += 1
+        for file_path in matching_files:
+            try:
+                os.remove(file_path)
+                deleted_count += 1
+            except OSError as e:
+                print(f"  ⚠️  Could not delete {os.path.basename(file_path)}: {e}")
         
         if deleted_count > 0:
-            print(f"  ✅ Deleted {deleted_count} PNG files")
+            print(f"  ✅ Deleted {deleted_count} PNG files with current config prefix")
         else:
             print("  ℹ️  No PNG files to delete")
         
@@ -818,7 +882,8 @@ class UnifiedVAETrainer:
         
         # Print loss configuration
         loss_config = self.config.get('loss_config', {})
-        print(f"  • Loss weights: MSE={loss_config.get('mse_weight', 0)}, L1={loss_config.get('l1_weight', 0)}, Perceptual={loss_config.get('perceptual_weight', 0)}, GenQual={loss_config.get('generation_weight', 0)}")
+        current_perceptual_weight = self.get_current_perceptual_weight()
+        print(f"  • Loss weights: MSE={loss_config.get('mse_weight', 0)}, L1={loss_config.get('l1_weight', 0)}, Perceptual={current_perceptual_weight:.3f}, GenQual={loss_config.get('generation_weight', 0)}")
         print(f"  • Loss components: MSE={loss_config.get('use_mse', False)}, L1={loss_config.get('use_l1', False)}, Perceptual={loss_config.get('use_perceptual_loss', False)}")
         print(f"  • Generation Quality: Edge Sharpness (40%), Diversity (30%), Contrast (30%)")
         
@@ -830,10 +895,22 @@ class UnifiedVAETrainer:
         else:
             current_beta = self.get_current_beta()
             print(f"  • Beta: {current_beta:.3f} (fixed)")
+        
+        # Show perceptual configuration
+        if self.config.get('perceptual_schedule', False):
+            perceptual_start = self.config.get('perceptual_start', 0.0)
+            perceptual_end = self.config.get('perceptual_end', 0.6)
+            warmup_epochs = self.config.get('perceptual_warmup_epochs', 20)
+            print(f"  • Perceptual Schedule: {perceptual_start:.1f} → {perceptual_end:.1f} (warmup: {warmup_epochs} epochs)")
+        else:
+            print(f"  • Perceptual: {current_perceptual_weight:.3f} (fixed)")
     
-    def generate_samples(self, epoch, val_data):
+    def generate_samples(self, epoch, val_data, suffix=""):
         """Generate sample images."""
-        print(f"  🖼️  Generating sample images...")
+        if suffix:
+            print(f"  🖼️  Generating sample images ({suffix})...")
+        else:
+            print(f"  🖼️  Generating sample images...")
         
         # Create sample_images directory
         sample_dir = "sample_images"
@@ -853,7 +930,7 @@ class UnifiedVAETrainer:
             config_name = self.config.get('config_name', 'unified')
             
             # Save sample images
-            sample_path = os.path.join(sample_dir, f"{config_name}_generated_epoch_{epoch+1:03d}.png")
+            sample_path = os.path.join(sample_dir, f"{config_name}_generated_epoch_{epoch+1:03d}{suffix}.png")
             titles = [f"Epoch {epoch+1} - Sample {i+1}" for i in range(8)]
             display_image_grid(generated_np, 
                               titles=titles,
@@ -871,7 +948,7 @@ class UnifiedVAETrainer:
             val_np = val_images.permute(0, 2, 3, 1).cpu().numpy()
             recon_np = reconstructed.permute(0, 2, 3, 1).cpu().numpy()
             
-            recon_path = os.path.join(sample_dir, f"{config_name}_reconstruction_epoch_{epoch+1:03d}.png")
+            recon_path = os.path.join(sample_dir, f"{config_name}_reconstruction_epoch_{epoch+1:03d}{suffix}.png")
             display_comparison_grid(val_np, recon_np,
                                    titles=[f"Epoch {epoch+1} - Pair {i+1}" for i in range(4)],
                                    max_cols=2, 
@@ -920,6 +997,11 @@ class UnifiedVAETrainer:
             # Training phase
             train_metrics = self.train_epoch(train_loader, epoch)
             
+            # Generate mid-epoch samples for closer monitoring
+            if epoch > 0 and epoch % 2 == 0:  # Every 2 epochs after the first
+                print(f"  🔍 Generating mid-epoch samples...")
+                self.generate_samples(epoch, val_loader.dataset, suffix="_mid_epoch")
+            
             # Validation phase
             val_metrics = self.validate_epoch(val_loader, epoch)
             
@@ -944,6 +1026,10 @@ class UnifiedVAETrainer:
                 # Log beta value
                 current_beta = self.get_current_beta()
                 self.writer.add_scalar('Beta', current_beta, epoch)
+                
+                # Log perceptual weight
+                current_perceptual_weight = self.get_current_perceptual_weight()
+                self.writer.add_scalar('Perceptual_Weight', current_perceptual_weight, epoch)
             
             # Get GPU statistics
             if torch.cuda.is_available():
@@ -973,7 +1059,35 @@ class UnifiedVAETrainer:
             else:
                 print(f"🔄 BETA: {current_beta:.3f} (fixed)")
             
+            # Display current perceptual weight
+            current_perceptual_weight = self.get_current_perceptual_weight()
+            if self.config.get('perceptual_schedule', False):
+                perceptual_start = self.config.get('perceptual_start', 0.0)
+                perceptual_end = self.config.get('perceptual_end', 0.6)
+                warmup_epochs = self.config.get('perceptual_warmup_epochs', 20)
+                if epoch < warmup_epochs:
+                    warmup_progress = epoch / warmup_epochs
+                    print(f"🎨 PERCEPTUAL: {current_perceptual_weight:.3f} (warmup: {perceptual_start:.1f} → {perceptual_end:.1f}, {warmup_progress*100:.0f}% complete)")
+                else:
+                    print(f"🎨 PERCEPTUAL: {current_perceptual_weight:.3f} (scheduled: {perceptual_start:.1f} → {perceptual_end:.1f}, warmup complete)")
+            else:
+                print(f"🎨 PERCEPTUAL: {current_perceptual_weight:.3f} (fixed)")
+            
             print(f"💾 GPU MEMORY: {gpu_memory_allocated:.1f}GB / {gpu_memory_total:.1f}GB ({gpu_utilization:.0f}%)")
+            
+            # Display all current weights for monitoring
+            print(f"\n⚖️  CURRENT WEIGHTS:")
+            print(f"{'─'*40}")
+            loss_config = self.config.get('loss_config', {})
+            mse_weight = loss_config.get('mse_weight', 0)
+            l1_weight = loss_config.get('l1_weight', 0)
+            generation_weight = loss_config.get('generation_weight', 0)
+            
+            print(f"  📐 MSE:           {mse_weight:.3f} (fixed)")
+            print(f"  📏 L1:            {l1_weight:.3f} (fixed)")
+            print(f"  🎨 Perceptual:    {current_perceptual_weight:.3f} (scheduled)")
+            print(f"  🎯 Generation:    {generation_weight:.3f} (fixed)")
+            print(f"  🔄 Beta:          {current_beta:.3f} (scheduled)" if self.config.get('beta_schedule', False) else f"  🔄 Beta:          {current_beta:.3f} (fixed)")
             
             print(f"\n🔍 LOSS BREAKDOWN:")
             print(f"{'─'*40}")
@@ -982,8 +1096,10 @@ class UnifiedVAETrainer:
             loss_config = self.config.get('loss_config', {})
             mse_weight = loss_config.get('mse_weight', 0)
             l1_weight = loss_config.get('l1_weight', 0)
-            perceptual_weight = loss_config.get('perceptual_weight', 0)
             generation_weight = loss_config.get('generation_weight', 0)
+            
+            # Use current perceptual weight (with scheduling)
+            perceptual_weight = current_perceptual_weight
             
             if mse_weight > 0:
                 mse_contrib = (train_metrics['mse'] * mse_weight) / train_metrics['loss'] * 100
@@ -1108,23 +1224,26 @@ class UnifiedVAETrainer:
 
 def main():
     """Main function with command-line argument parsing."""
+    # Load available presets dynamically from config
+    config_loader = ConfigLoader('config/config_unified.json')
+    # Filter out comment entries and other non-preset keys
+    available_loss_presets = [k for k in config_loader.unified_config['loss_presets'].keys() if not k.startswith('_')]
+    available_training_presets = [k for k in config_loader.unified_config['training_presets'].keys() if not k.startswith('_')]
+    available_model_presets = [k for k in config_loader.unified_config['model_presets'].keys() if not k.startswith('_')]
+    available_dataset_presets = [k for k in config_loader.unified_config['dataset_presets'].keys() if not k.startswith('_')]
+    
     parser = argparse.ArgumentParser(description='Unified VAE Training Script')
     parser.add_argument('--loss-preset', type=str, default='high_quality',
-                       choices=['mse_only', 'mse_l1', 'perceptual', 'lpips', 'custom_balanced', 
-                               'high_quality', 'high_diversity', 'ultra_high_quality_loss', 'full_retrain_optimal'],
+                       choices=available_loss_presets,
                        help='Loss function preset')
     parser.add_argument('--training-preset', type=str, default='fast_high_quality_training',
-                       choices=['quick_test', 'fast_training', 'standard_training', 'extended_training',
-                               'ultra_high_quality_training', 'fast_high_quality_training', 
-                               'balanced_high_quality_training', 'compact_high_quality_training',
-                               'beta_scheduled_training', 'full_retrain_training'],
+                       choices=available_training_presets,
                        help='Training configuration preset')
     parser.add_argument('--model-preset', type=str, default='fast_high_quality',
-                       choices=['small', 'medium', 'large', 'high_res', 'ultra_high_quality',
-                               'fast_high_quality', 'balanced_high_quality', 'compact_high_quality'],
+                       choices=available_model_presets,
                        help='Model architecture preset')
     parser.add_argument('--dataset-preset', type=str, default='full',
-                       choices=['tiny', 'small', 'medium', 'large', 'full'],
+                       choices=available_dataset_presets,
                        help='Dataset size preset')
     parser.add_argument('--no-resume', action='store_true',
                        help='Start fresh training (ignore checkpoints)')

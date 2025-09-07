@@ -88,7 +88,7 @@ def debug_transform_pipeline():
         transforms.ToTensor(),  # This already normalizes to [0,1]
     ])
     
-    correct_image = correct_transform(pil_image)
+    correct_image = correct_transform(pil_image) 
     print(f"Correct image: shape {correct_image.shape}, range {correct_image.min():.6f} to {correct_image.max():.6f}, mean {correct_image.mean():.6f}")
     
     # Visualize the results
