@@ -277,7 +277,32 @@
             "lr": 0.0005,
             "beta_schedule": true,
             "beta_start": 0.0,
-            "beta_end": 1.0
+            "beta_end": 0.1
+        },
+        
+        "mse_priority_training": {
+            "_description": "MSE-priority training - emphasizes reconstruction early, balanced later",
+            "_use_case": "Good reconstruction first, then balanced objectives",
+            "_pros": "Strong reconstruction foundation, prevents KL domination, balanced training",
+            "_cons": "More complex scheduling",
+            "max_epoch": 30,
+            "batch_size": 128,
+            "lr": 0.001,
+            "beta_schedule": true,
+            "beta_start": 0.0,
+            "beta_end": 0.3,
+            "beta_warmup_epochs": 8,
+            "perceptual_schedule": true,
+            "perceptual_start": 0.0,
+            "perceptual_end": 0.1,
+            "perceptual_warmup_epochs": 12,
+            "generation_schedule": true,
+            "generation_start": 0.0,
+            "generation_end": 0.01,
+            "generation_warmup_epochs": 15,
+            "mse_priority_phase": true,
+            "mse_priority_epochs": 8,
+            "mse_priority_multiplier": 2.0
         },
         
         "standard_training": {
@@ -548,6 +573,112 @@
             "_description": "Full dataset - all available samples",
             "_use_case": "Production training, best possible quality",
             "dataset_subset": null
+        }
+    },
+    
+    "loss_analysis_presets": {
+        "_comment": "Loss analysis method configurations for different analysis needs",
+        
+        "none": {
+            "_description": "No loss analysis - fastest training",
+            "_use_case": "Quick testing, when analysis is not needed",
+            "enabled": false
+        },
+        
+        "basic": {
+            "_description": "Basic loss analysis with standard method only",
+            "_use_case": "Quick analysis for basic training monitoring",
+            "enabled": true,
+            "methods": ["standard"],
+            "interval": 10,
+            "stuck_threshold": 0.001,
+            "stuck_patience": 5,
+            "trend_window": 10,
+            "enable_logging": false
+        },
+        
+        "standard": {
+            "_description": "Standard loss analysis with all three methods",
+            "_use_case": "Comprehensive analysis for most training scenarios",
+            "enabled": true,
+            "methods": ["standard", "constant_weight", "pareto"],
+            "interval": 5,
+            "stuck_threshold": 0.001,
+            "stuck_patience": 5,
+            "trend_window": 10,
+            "enable_logging": true,
+            "log_file": "loss_analysis.json",
+            "reference_weights": {
+                "mse_weight": 1.0,
+                "l1_weight": 0.2,
+                "perceptual_weight": 0.01,
+                "generation_weight": 0.001,
+                "beta": 0.0
+            },
+            "pareto_objectives": ["mse", "l1", "perceptual", "kl"],
+            "pareto_tolerance": 0.01
+        },
+        
+        "detailed": {
+            "_description": "Detailed loss analysis with enhanced monitoring",
+            "_use_case": "Research, debugging, or when detailed insights are needed",
+            "enabled": true,
+            "methods": ["standard", "constant_weight", "pareto"],
+            "interval": 3,
+            "stuck_threshold": 0.0005,
+            "stuck_patience": 3,
+            "trend_window": 15,
+            "enable_logging": true,
+            "log_file": "detailed_loss_analysis.json",
+            "save_plots": true,
+            "plot_dir": "loss_analysis_plots",
+            "reference_weights": {
+                "mse_weight": 1.0,
+                "l1_weight": 0.2,
+                "perceptual_weight": 0.01,
+                "generation_weight": 0.001,
+                "beta": 0.0
+            },
+            "pareto_objectives": ["mse", "l1", "perceptual", "generation_quality", "kl"],
+            "pareto_weights": {
+                "mse": 1.0,
+                "l1": 0.8,
+                "perceptual": 1.2,
+                "generation_quality": 0.5,
+                "kl": 1.0
+            },
+            "pareto_tolerance": 0.005
+        },
+        
+        "research": {
+            "_description": "Research-grade loss analysis with maximum detail",
+            "_use_case": "Academic research, publication, or maximum insight needs",
+            "enabled": true,
+            "methods": ["standard", "constant_weight", "pareto"],
+            "interval": 1,
+            "stuck_threshold": 0.0001,
+            "stuck_patience": 2,
+            "trend_window": 20,
+            "enable_logging": true,
+            "log_file": "research_loss_analysis.json",
+            "save_plots": true,
+            "plot_dir": "research_analysis_plots",
+            "reference_weights": {
+                "mse_weight": 1.0,
+                "l1_weight": 0.2,
+                "perceptual_weight": 0.01,
+                "generation_weight": 0.001,
+                "beta": 0.0
+            },
+            "pareto_objectives": ["mse", "l1", "perceptual", "generation_quality", "kl"],
+            "pareto_weights": {
+                "mse": 1.0,
+                "l1": 0.8,
+                "perceptual": 1.2,
+                "generation_quality": 0.5,
+                "kl": 1.0
+            },
+            "pareto_tolerance": 0.001
         }
     }
 }

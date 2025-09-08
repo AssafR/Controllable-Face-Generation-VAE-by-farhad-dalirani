@@ -6,6 +6,7 @@ Centralized, consistent scheduling for all loss weights (beta, perceptual, etc.)
 
 from typing import Dict, Any, List, Optional
 import math
+from mse_priority_manager import LossPriorityManager
 
 
 class LossWeightManager:
@@ -78,7 +79,8 @@ class LossWeightManager:
         self.l1_history = []
         
         # Stuck training detection and schedule acceleration
-        self.stuck_detection = config.get('stuck_detection', True)
+        # NOTE: Stuck detection is now handled by the loss analysis system
+        self.stuck_detection = False  # Disabled - use loss analysis system instead
         self.stuck_patience = config.get('stuck_patience', 5)  # epochs without improvement
         self.acceleration_factor = config.get('acceleration_factor', 2.0)  # 2x speed when stuck
         self.best_loss = float('inf')
@@ -89,6 +91,14 @@ class LossWeightManager:
         # Stage-based training configuration
         self.stage_based = config.get('stage_based_training', False)
         self.stages = config.get('stages', {})
+        
+        # MSE priority phase configuration
+        self.mse_priority_phase = config.get('mse_priority_phase', False)
+        self.mse_priority_epochs = config.get('mse_priority_epochs', 10)
+        self.mse_priority_multiplier = config.get('mse_priority_multiplier', 2.0)
+        
+        # Initialize loss priority manager
+        self.priority_manager = LossPriorityManager(self)
     
     def set_epoch(self, epoch: int) -> None:
         """Update current epoch for weight calculations."""
@@ -193,7 +203,10 @@ class LossWeightManager:
     
     def check_stuck_training(self, current_loss: float) -> bool:
         """
-        Check if training is stuck and accelerate scheduled updates if needed.
+        DEPRECATED: Check if training is stuck and accelerate scheduled updates if needed.
+        
+        This method is deprecated. Stuck detection is now handled by the loss analysis system.
+        Use the loss analysis system for all training decisions.
         
         Args:
             current_loss: Current epoch's total loss
@@ -201,25 +214,7 @@ class LossWeightManager:
         Returns:
             True if acceleration was applied, False otherwise
         """
-        if not self.stuck_detection:
-            return False
-            
-        # Check if we have improvement
-        if current_loss < self.best_loss:
-            self.best_loss = current_loss
-            self.stuck_epochs = 0
-            self.acceleration_active = False
-            return False
-        
-        # Increment stuck counter
-        self.stuck_epochs += 1
-        
-        # Apply acceleration if stuck for too long
-        if self.stuck_epochs >= self.stuck_patience and not self.acceleration_active:
-            self.acceleration_active = True
-            print(f"  ⚡ Accelerating scheduled updates (stuck for {self.stuck_epochs} epochs)")
-            return True
-            
+        # This method is deprecated - stuck detection now handled by loss analysis system
         return False
     
     def get_effective_epoch(self) -> int:
@@ -275,6 +270,12 @@ class LossWeightManager:
         
         if loss_type == 'l1_weight' and self.adaptive_mse_l1:
             return self.current_l1_weight
+        
+        # Apply priority phase modifications using the centralized manager
+        priority_modifier = self.priority_manager.get_weight_modifier(loss_type, self.current_epoch)
+        if priority_modifier != 1.0:
+            base_weight = self._get_scheduled_weight(loss_type) if not self.stage_based else self._get_stage_based_weight(loss_type)
+            return base_weight * priority_modifier
         
         if self.stage_based:
             return self._get_stage_based_weight(loss_type)
@@ -372,13 +373,20 @@ class LossWeightManager:
         """
         weight = self.get_weight(loss_type)
         
+        # Get priority information using the centralized manager
+        priority_info = self.priority_manager.get_display_info(self.current_epoch)
+        
         if self.stage_based:
             stage_name = self.get_current_stage_name()
-            return {
+            info = {
                 'value': weight,
                 'type': 'stage-based',
                 'stage': stage_name
             }
+            # Add priority information if any priority is active
+            if priority_info:
+                info.update(priority_info)
+            return info
         
         # Extract base name from loss_type (e.g., "generation_weight" -> "generation")
         base_name = loss_type.replace('_weight', '')
@@ -390,13 +398,43 @@ class LossWeightManager:
             end_key = f"{base_name}_end"
             warmup_key = f"{base_name}_warmup_epochs"
             
-            return {
+            info: Dict[str, Any] = {
                 'value': weight,
                 'type': 'scheduled',
                 'start': self.config.get(start_key, weight),
                 'end': self.config.get(end_key, weight),
                 'warmup_epochs': self.config.get(warmup_key, self.max_epochs)
             }
+            
+            # Add MSE priority information if active
+            mse_priority_active = bool(self.mse_priority_phase) and (self.current_epoch < int(self.mse_priority_epochs))
+            if mse_priority_active:
+                info.update({
+                    'mse_priority_active': True,
+                    'mse_priority_epochs': self.mse_priority_epochs,
+                    'mse_priority_multiplier': self.mse_priority_multiplier,
+                    'mse_priority_remaining': self.mse_priority_epochs - self.current_epoch
+                })
+
+            # Add schedule progress within warmup (0-100%)
+            try:
+                warmup_epochs = max(1, int(info['warmup_epochs']))
+                progress = min(1.0, max(0.0, float(self.get_effective_epoch()) / float(warmup_epochs)))
+                info['progress'] = progress
+            except Exception:
+                pass
+
+            # Special handling for KL cyclical annealing to reflect up/down phases
+            if loss_type == 'beta' and self.kl_cycle_enabled:
+                period = max(1, int(self.kl_cycle_period))
+                cooldown = max(0, int(self.kl_cooldown_epochs))
+                cycle_pos = self.current_epoch % period
+                phase = 'down' if cycle_pos < cooldown else 'up'
+                info['cycle_period'] = period
+                info['cycle_pos'] = cycle_pos
+                info['phase'] = phase
+            
+            return info
         else:
             return {
                 'value': weight,

@@ -40,6 +40,9 @@ class ConfigurationManager:
         # Loss configuration
         self._print_loss_configuration()
         
+        # Loss analysis configuration
+        self._print_loss_analysis_configuration()
+        
         # Dataset configuration
         self._print_dataset_configuration()
         
@@ -47,6 +50,54 @@ class ConfigurationManager:
         self._print_hardware_configuration()
         
         print(f"\n{'='*70}")
+    
+    def _print_loss_analysis_configuration(self) -> None:
+        """Print loss analysis configuration details."""
+        loss_analysis_config = self.config.get('loss_analysis', {})
+        if not loss_analysis_config:
+            return
+        
+        print(f"\n📊 LOSS ANALYSIS CONFIGURATION:")
+        
+        # Analysis methods
+        methods = self.config.get('loss_analysis_methods', ['standard', 'constant_weight', 'pareto'])
+        method_icons = {
+            'standard': '📈',
+            'constant_weight': '⚖️', 
+            'pareto': '🎯'
+        }
+        method_names = {
+            'standard': 'Standard',
+            'constant_weight': 'Constant Weight',
+            'pareto': 'Pareto Criterion'
+        }
+        
+        method_display = []
+        for method in methods:
+            icon = method_icons.get(method, '📊')
+            name = method_names.get(method, method.replace('_', ' ').title())
+            method_display.append(f"{icon} {name}")
+        
+        print(f"  • Analysis methods: {', '.join(method_display)}")
+        
+        # Analysis parameters
+        if 'stuck_threshold' in loss_analysis_config:
+            print(f"  • Stuck threshold: {loss_analysis_config['stuck_threshold']}")
+        if 'stuck_patience' in loss_analysis_config:
+            print(f"  • Stuck patience: {loss_analysis_config['stuck_patience']} epochs")
+        if 'trend_window' in loss_analysis_config:
+            print(f"  • Trend window: {loss_analysis_config['trend_window']} epochs")
+        
+        # Reporting interval
+        interval = self.config.get('loss_analysis_interval', 5)
+        print(f"  • Report interval: Every {interval} epochs")
+        
+        # Logging
+        if loss_analysis_config.get('enable_logging', False):
+            log_file = loss_analysis_config.get('log_file', 'loss_analysis.json')
+            print(f"  • Logging: Enabled ({log_file})")
+        else:
+            print(f"  • Logging: Disabled")
     
     def _print_loss_configuration(self) -> None:
         """Print loss configuration details."""
@@ -362,33 +413,17 @@ class TrainingUtilities:
     
     def assess_loss_behavior(self, train_metrics: Dict[str, float], 
                            val_metrics: Dict[str, float], epoch: int) -> None:
-        """Assess and report on loss behavior patterns."""
-        # Check for potential issues
-        issues = []
+        """
+        DEPRECATED: Assess and report on loss behavior patterns.
         
-        # Check for overfitting
-        if train_metrics['loss'] < val_metrics['loss'] * 0.7:
-            issues.append("Potential overfitting (train loss much lower than val)")
-        
-        # Check for underfitting
-        if val_metrics['loss'] > train_metrics['loss'] * 1.5:
-            issues.append("Potential underfitting (val loss much higher than train)")
-        
-        # Check for KL collapse
+        This method is deprecated. Loss behavior assessment is now handled by the 
+        loss analysis system which provides more comprehensive and intelligent analysis.
+        """
+        # This method is deprecated - use loss analysis system instead
+        # Only provide basic health check as fallback
         if train_metrics.get('kl', 0) < 0.001:
-            issues.append("KL collapse detected (KL loss very low)")
-        
-        # Check for perceptual loss issues (use higher threshold since raw values are large)
-        if train_metrics.get('perceptual', 0) > 50:  # Increased from 10 to 50
-            issues.append("High perceptual loss (may need weight adjustment)")
-        
-        # Report issues
-        if issues:
-            print(f"  ⚠️  Training Issues Detected:")
-            for issue in issues:
-                print(f"    • {issue}")
-        else:
-            print(f"  ✅ Training appears healthy")
+            print(f"  ⚠️  KL collapse detected (KL loss very low) - consider increasing beta")
+        # Other checks are now handled by the loss analysis system
 
 
 def create_training_utilities(config: Dict[str, Any], device: str = 'cuda') -> TrainingUtilities:

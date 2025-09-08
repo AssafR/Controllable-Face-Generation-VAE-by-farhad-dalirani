@@ -29,6 +29,7 @@ class ConfigLoader:
                    training_preset: str = "standard_training",
                    model_preset: str = "medium",
                    dataset_preset: str = "full",
+                   loss_analysis_preset: str = "standard",
                    custom_overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Get a complete configuration by combining presets.
@@ -38,6 +39,7 @@ class ConfigLoader:
             training_preset: Training configuration preset  
             model_preset: Model architecture preset
             dataset_preset: Dataset size preset
+            loss_analysis_preset: Loss analysis configuration preset
             custom_overrides: Custom values to override any preset values
             
         Returns:
@@ -94,6 +96,41 @@ class ConfigLoader:
             config.update(dataset_config)
         else:
             print(f"⚠️  Dataset preset '{dataset_preset}' not found, using base config")
+        
+        # Apply loss analysis preset (support 'none')
+        if loss_analysis_preset == 'none':
+            # Explicitly disable loss analysis
+            config["enable_loss_analysis"] = False
+            # Do not add loss_analysis configuration
+        elif loss_analysis_preset in self.unified_config["loss_analysis_presets"]:
+            analysis_config = self.unified_config["loss_analysis_presets"][loss_analysis_preset]
+            # Filter out documentation fields
+            analysis_config = {k: v for k, v in analysis_config.items() if not k.startswith('_')}
+            
+            # Handle enabled/disabled state
+            if not analysis_config.get('enabled', True):
+                # If disabled, don't add any analysis config
+                config["enable_loss_analysis"] = False
+            else:
+                # Add analysis config to the main config
+                config["loss_analysis"] = analysis_config
+                config["enable_loss_analysis"] = True
+                # Also add methods and interval to top level for easy access
+                if 'methods' in analysis_config:
+                    config["loss_analysis_methods"] = analysis_config['methods']
+                if 'interval' in analysis_config:
+                    config["loss_analysis_interval"] = analysis_config['interval']
+        else:
+            print(f"⚠️  Loss analysis preset '{loss_analysis_preset}' not found, using default")
+            # Default to standard analysis
+            config["loss_analysis"] = {
+                "enabled": True,
+                "methods": ["standard", "constant_weight", "pareto"],
+                "interval": 5
+            }
+            config["enable_loss_analysis"] = True
+            config["loss_analysis_methods"] = ["standard", "constant_weight", "pareto"]
+            config["loss_analysis_interval"] = 5
         
         # Apply custom overrides
         if custom_overrides:

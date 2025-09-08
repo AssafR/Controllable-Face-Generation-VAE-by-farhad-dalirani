@@ -1,0 +1,1629 @@
+[
+  {
+    "epoch": 0,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "insufficient_data",
+      "is_stuck": false,
+      "improvement_rate": 0.0,
+      "volatility": 0.0,
+      "weight_changes": {},
+      "weight_impact": "insufficient_data"
+    },
+    "recommendations": [],
+    "health_score": 0.5,
+    "timestamp": "2025-09-08T08:13:24.476958"
+  },
+  {
+    "epoch": 0,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.12201253988140329,
+      "trend": "insufficient_data",
+      "improvement_rate": 0.0,
+      "stability": 0.0,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      }
+    },
+    "recommendations": [
+      "High reference loss volatility - consider stabilizing training"
+    ],
+    "health_score": 0.3,
+    "timestamp": "2025-09-08T08:13:24.477958"
+  },
+  {
+    "epoch": 0,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.4402119481720584,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.12695544602691033,
+      "pareto_front_size": 1,
+      "objectives": {
+        "mse": 0.10806852778747558,
+        "l1": 0.056286092765219904,
+        "perceptual": 0.2653599021058582,
+        "kl": 0.010497425513504686
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others"
+    ],
+    "health_score": 0.8880866338080731,
+    "timestamp": "2025-09-08T08:13:24.485959"
+  },
+  {
+    "epoch": 1,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "insufficient_data",
+      "is_stuck": false,
+      "improvement_rate": 0.0,
+      "volatility": 0.0,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 0.0004991670832341401,
+        "generation_weight": 1.0000000000000026e-05,
+        "beta": 0.010000000000000002
+      },
+      "weight_impact": "negative"
+    },
+    "recommendations": [],
+    "health_score": 0.5,
+    "timestamp": "2025-09-08T08:13:24.496960"
+  },
+  {
+    "epoch": 1,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.14217946416374702,
+      "trend": "insufficient_data",
+      "improvement_rate": 0.0,
+      "stability": 0.0,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01049916708323414,
+        "generation_weight": 0.00101,
+        "beta": 0.010000000000000002
+      }
+    },
+    "recommendations": [
+      "High reference loss volatility - consider stabilizing training"
+    ],
+    "health_score": 0.3,
+    "timestamp": "2025-09-08T08:13:24.505964"
+  },
+  {
+    "epoch": 1,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.4543898580002109,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.17099029404721466,
+      "pareto_front_size": 2,
+      "objectives": {
+        "mse": 0.12867028815360929,
+        "l1": 0.05428090561185518,
+        "perceptual": 0.2597155529765425,
+        "kl": 0.01172311125820394
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others",
+      "Weighted objective sum increasing - consider rebalancing"
+    ],
+    "health_score": 0.9012970882141644,
+    "timestamp": "2025-09-08T08:13:24.515961"
+  },
+  {
+    "epoch": 2,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "improving",
+      "is_stuck": false,
+      "improvement_rate": 0.24807974848664058,
+      "volatility": 0.014560228835673357,
+      "stuck_epochs": 0,
+      "best_loss": 0.10774711618650545,
+      "current_loss": 0.10774711618650545,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 0.000494179570741167,
+        "generation_weight": 1.0000000000000026e-05,
+        "beta": 0.010000000000000002
+      },
+      "weight_impact": "positive"
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:24.530965"
+  },
+  {
+    "epoch": 2,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.10655663185968853,
+      "trend": "improving",
+      "improvement_rate": 0.2505483651494983,
+      "stability": 0.9856243827356006,
+      "volatility": 0.01458528980837491,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.010993346653975307,
+        "generation_weight": 0.00102,
+        "beta": 0.020000000000000004
+      }
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:24.541960"
+  },
+  {
+    "epoch": 2,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.37865381568830386,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.12914762211073394,
+      "pareto_front_size": 3,
+      "objectives": {
+        "mse": 0.09566989886670049,
+        "l1": 0.042803504075562125,
+        "perceptual": 0.2277947196656843,
+        "kl": 0.012385693080356893
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others"
+    ],
+    "health_score": 0.8887442866332201,
+    "timestamp": "2025-09-08T08:13:24.551964"
+  },
+  {
+    "epoch": 3,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "worsening",
+      "is_stuck": false,
+      "improvement_rate": -0.30451977841854594,
+      "volatility": 0.01615131112243562,
+      "stuck_epochs": 1,
+      "best_loss": 0.10774711618650545,
+      "current_loss": 0.14055824413285742,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 0.00048425437933138915,
+        "generation_weight": 1.0000000000000026e-05,
+        "beta": 0.009999999999999995
+      },
+      "weight_impact": "negative"
+    },
+    "recommendations": [
+      "Loss is worsening - consider reducing learning rate or checking for overfitting"
+    ],
+    "health_score": 0.0,
+    "timestamp": "2025-09-08T08:13:24.563960"
+  },
+  {
+    "epoch": 3,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.13947197892092505,
+      "trend": "worsening",
+      "improvement_rate": -0.3089000326566135,
+      "stability": 0.984065641271343,
+      "volatility": 0.016192373821802053,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.011477601033306696,
+        "generation_weight": 0.00103,
+        "beta": 0.03
+      }
+    },
+    "recommendations": [
+      "Reference loss is worsening - consider fundamental training adjustments",
+      "Reference loss deteriorating - check for overfitting or learning rate issues"
+    ],
+    "health_score": 0.1936262565085372,
+    "timestamp": "2025-09-08T08:13:24.573964"
+  },
+  {
+    "epoch": 3,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.4199437709004333,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.22545546616338452,
+      "pareto_front_size": 4,
+      "objectives": {
+        "mse": 0.1259935486064416,
+        "l1": 0.05578322546291224,
+        "perceptual": 0.2267627694363839,
+        "kl": 0.011404227394695531
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others",
+      "Weighted objective sum increasing - consider rebalancing"
+    ],
+    "health_score": 0.9176366398490153,
+    "timestamp": "2025-09-08T08:13:24.582963"
+  },
+  {
+    "epoch": 4,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "improving",
+      "is_stuck": false,
+      "improvement_rate": 0.2384985699554976,
+      "volatility": 0.015637790107076065,
+      "stuck_epochs": 0,
+      "best_loss": 0.10703530391171522,
+      "current_loss": 0.10703530391171522,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 0.00046949067823655495,
+        "generation_weight": 1.0000000000000026e-05,
+        "beta": 0.010000000000000009
+      },
+      "weight_impact": "positive"
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:24.592963"
+  },
+  {
+    "epoch": 4,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.10610989543244537,
+      "trend": "improving",
+      "improvement_rate": 0.2392027685173567,
+      "stability": 0.9846175128228015,
+      "volatility": 0.01562280477126437,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.011947091711543251,
+        "generation_weight": 0.0010400000000000001,
+        "beta": 0.04000000000000001
+      }
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:24.601961"
+  },
+  {
+    "epoch": 4,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.3871639459373792,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.1427181563398766,
+      "pareto_front_size": 3,
+      "objectives": {
+        "mse": 0.09311025780352562,
+        "l1": 0.053210723188770445,
+        "perceptual": 0.23112661137858673,
+        "kl": 0.009716353566496399
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others"
+    ],
+    "health_score": 0.892815446901963,
+    "timestamp": "2025-09-08T08:13:24.612962"
+  },
+  {
+    "epoch": 5,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "improving",
+      "is_stuck": false,
+      "improvement_rate": -0.07429439545028423,
+      "volatility": 0.014301866497183763,
+      "stuck_epochs": 1,
+      "best_loss": 0.10703530391171522,
+      "current_loss": 0.11498742710767354,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 0.0004500359814777633,
+        "generation_weight": 1.0000000000000026e-05,
+        "beta": 0.009999999999999995
+      },
+      "weight_impact": "negative"
+    },
+    "recommendations": [],
+    "health_score": 0.6000000000000001,
+    "timestamp": "2025-09-08T08:13:24.621964"
+  },
+  {
+    "epoch": 5,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.11409956482690149,
+      "trend": "improving",
+      "improvement_rate": -0.0752961763075408,
+      "stability": 0.9859765355802155,
+      "volatility": 0.014222919018587193,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.012397127693021015,
+        "generation_weight": 0.0010500000000000002,
+        "beta": 0.05
+      }
+    },
+    "recommendations": [
+      "Reference loss deteriorating - check for overfitting or learning rate issues"
+    ],
+    "health_score": 0.7943906142320862,
+    "timestamp": "2025-09-08T08:13:24.632964"
+  },
+  {
+    "epoch": 5,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.39564669732071034,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.13236766559318247,
+      "pareto_front_size": 4,
+      "objectives": {
+        "mse": 0.10209550006249762,
+        "l1": 0.04793481308306395,
+        "perceptual": 0.23618526654390828,
+        "kl": 0.009431117631240486
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others",
+      "Weighted objective sum increasing - consider rebalancing"
+    ],
+    "health_score": 0.8897102996779548,
+    "timestamp": "2025-09-08T08:13:24.642964"
+  },
+  {
+    "epoch": 6,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "improving",
+      "is_stuck": false,
+      "improvement_rate": 0.15510638797773108,
+      "volatility": 0.0072954362664239695,
+      "stuck_epochs": 0,
+      "best_loss": 0.09715214262614966,
+      "current_loss": 0.09715214262614966,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 0.00042608467395416176,
+        "generation_weight": 1.0000000000000026e-05,
+        "beta": 0.009999999999999995
+      },
+      "weight_impact": "positive"
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:24.651961"
+  },
+  {
+    "epoch": 6,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.09621839297942981,
+      "trend": "improving",
+      "improvement_rate": 0.15671551310996584,
+      "stability": 0.9927393937873429,
+      "volatility": 0.007313708167616444,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.012823212366975176,
+        "generation_weight": 0.0010600000000000002,
+        "beta": 0.06
+      }
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:24.662959"
+  },
+  {
+    "epoch": 6,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.36875858497810654,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.16865056947743484,
+      "pareto_front_size": 5,
+      "objectives": {
+        "mse": 0.08200016111300013,
+        "l1": 0.06002070034197386,
+        "perceptual": 0.21695478786176092,
+        "kl": 0.009782935661371629
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others"
+    ],
+    "health_score": 0.9005951708432305,
+    "timestamp": "2025-09-08T08:13:24.674960"
+  },
+  {
+    "epoch": 7,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "improving",
+      "is_stuck": false,
+      "improvement_rate": -0.1400153512964435,
+      "volatility": 0.007608820201293021,
+      "stuck_epochs": 1,
+      "best_loss": 0.09715214262614966,
+      "current_loss": 0.11075493400515218,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 0.00039787606921327934,
+        "generation_weight": 9.99999999999981e-06,
+        "beta": 0.009999999999999995
+      },
+      "weight_impact": "negative"
+    },
+    "recommendations": [],
+    "health_score": 0.6000000000000001,
+    "timestamp": "2025-09-08T08:13:24.686963"
+  },
+  {
+    "epoch": 7,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.1096853156106941,
+      "trend": "improving",
+      "improvement_rate": -0.13996204066870382,
+      "stability": 0.9924519988583808,
+      "volatility": 0.00760540676053015,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.013221088436188456,
+        "generation_weight": 0.00107,
+        "beta": 0.06999999999999999
+      }
+    },
+    "recommendations": [
+      "Reference loss deteriorating - check for overfitting or learning rate issues"
+    ],
+    "health_score": 0.7969807995433524,
+    "timestamp": "2025-09-08T08:13:24.698964"
+  },
+  {
+    "epoch": 7,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.3709721851964888,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.17465694764887107,
+      "pareto_front_size": 5,
+      "objectives": {
+        "mse": 0.0979510018606067,
+        "l1": 0.047720604093229285,
+        "perceptual": 0.2141138510929519,
+        "kl": 0.011186728149700885
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others",
+      "Weighted objective sum increasing - consider rebalancing"
+    ],
+    "health_score": 0.9023970842946614,
+    "timestamp": "2025-09-08T08:13:24.710963"
+  },
+  {
+    "epoch": 8,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "improving",
+      "is_stuck": false,
+      "improvement_rate": 0.09205321942042359,
+      "volatility": 0.005779193790433534,
+      "stuck_epochs": 2,
+      "best_loss": 0.09715214262614966,
+      "current_loss": 0.10055958576328138,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 0.00036569201830915707,
+        "generation_weight": 1.0000000000000026e-05,
+        "beta": 0.010000000000000023
+      },
+      "weight_impact": "positive"
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:24.721960"
+  },
+  {
+    "epoch": 8,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.09965751149172422,
+      "trend": "improving",
+      "improvement_rate": 0.09142339667929246,
+      "stability": 0.9943194810797673,
+      "volatility": 0.005712971563288559,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.013586780454497613,
+        "generation_weight": 0.00108,
+        "beta": 0.08000000000000002
+      }
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:24.733962"
+  },
+  {
+    "epoch": 8,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.38887113072112844,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.07501096483066194,
+      "pareto_front_size": 6,
+      "objectives": {
+        "mse": 0.08794606478644416,
+        "l1": 0.04604330926887389,
+        "perceptual": 0.2453701838168734,
+        "kl": 0.00951157284893702
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others",
+      "Weighted objective sum increasing - consider rebalancing"
+    ],
+    "health_score": 0.8725032894491986,
+    "timestamp": "2025-09-08T08:13:24.745963"
+  },
+  {
+    "epoch": 9,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "improving",
+      "is_stuck": true,
+      "improvement_rate": 0.011200312923125998,
+      "volatility": 0.005092405753198763,
+      "stuck_epochs": 3,
+      "best_loss": 0.09715214262614966,
+      "current_loss": 0.0994332869353127,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 0.00032985409363980346,
+        "generation_weight": 1.0000000000000026e-05,
+        "beta": 0.009999999999999995
+      },
+      "weight_impact": "positive"
+    },
+    "recommendations": [
+      "Training appears stuck - consider adjusting learning rate or loss weights"
+    ],
+    "health_score": 0.8,
+    "timestamp": "2025-09-08T08:13:24.755964"
+  },
+  {
+    "epoch": 9,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.09851552497075856,
+      "trend": "improving",
+      "improvement_rate": 0.011459111349178031,
+      "stability": 0.9950070294380416,
+      "volatility": 0.005018025415135231,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.013916634548137416,
+        "generation_weight": 0.00109,
+        "beta": 0.09000000000000001
+      }
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:24.767962"
+  },
+  {
+    "epoch": 9,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.3617350152214117,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.12616652978727194,
+      "pareto_front_size": 6,
+      "objectives": {
+        "mse": 0.0870479060965188,
+        "l1": 0.04612661706253105,
+        "perceptual": 0.21884435311053885,
+        "kl": 0.009716138951823002
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others"
+    ],
+    "health_score": 0.8878499589361816,
+    "timestamp": "2025-09-08T08:13:24.780963"
+  },
+  {
+    "epoch": 10,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "plateaued",
+      "is_stuck": true,
+      "improvement_rate": -0.02694845244049988,
+      "volatility": 0.0010985507064883717,
+      "stuck_epochs": 4,
+      "best_loss": 0.09715214262614966,
+      "current_loss": 0.10211286013929155,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 0.0002907203759020677,
+        "generation_weight": 1.0000000000000026e-05,
+        "beta": 0.009999999999999995
+      },
+      "weight_impact": "negative"
+    },
+    "recommendations": [
+      "Training appears stuck - consider adjusting learning rate or loss weights"
+    ],
+    "health_score": 0.0,
+    "timestamp": "2025-09-08T08:13:24.791962"
+  },
+  {
+    "epoch": 10,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.10141743363070294,
+      "trend": "stable",
+      "improvement_rate": -0.029456358891714964,
+      "stability": 0.9988078042058088,
+      "volatility": 0.0011936188215299444,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.014207354924039484,
+        "generation_weight": 0.0011,
+        "beta": 0.1
+      }
+    },
+    "recommendations": [
+      "Reference loss is stable - training may have converged",
+      "Reference loss deteriorating - check for overfitting or learning rate issues"
+    ],
+    "health_score": 0.5995231216823236,
+    "timestamp": "2025-09-08T08:13:24.803963"
+  },
+  {
+    "epoch": 10,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.36742769509510226,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.09674058792861051,
+      "pareto_front_size": 6,
+      "objectives": {
+        "mse": 0.09044149858637492,
+        "l1": 0.043324838343178136,
+        "perceptual": 0.22621935480304353,
+        "kl": 0.007442003362505646
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others",
+      "Weighted objective sum increasing - consider rebalancing"
+    ],
+    "health_score": 0.8790221763785832,
+    "timestamp": "2025-09-08T08:13:24.814959"
+  },
+  {
+    "epoch": 11,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "improving",
+      "is_stuck": false,
+      "improvement_rate": 0.10885367233822069,
+      "volatility": 0.00473631164843867,
+      "stuck_epochs": 0,
+      "best_loss": 0.09099750032017055,
+      "current_loss": 0.09099750032017055,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 0.0002486818762676927,
+        "generation_weight": 1.0000000000000026e-05,
+        "beta": 0.0
+      },
+      "weight_impact": "positive"
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:24.828961"
+  },
+  {
+    "epoch": 11,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.08983874507608747,
+      "trend": "improving",
+      "improvement_rate": 0.1141686211147642,
+      "stability": 0.9951050270910231,
+      "volatility": 0.00491905153296866,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.014456036800307177,
+        "generation_weight": 0.00111,
+        "beta": 0.1
+      }
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:24.840965"
+  },
+  {
+    "epoch": 11,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.34680169425553004,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.1439025710840004,
+      "pareto_front_size": 7,
+      "objectives": {
+        "mse": 0.07809586697152796,
+        "l1": 0.048124275441410416,
+        "perceptual": 0.2086819658210963,
+        "kl": 0.011899586021495394
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others"
+    ],
+    "health_score": 0.8931707713252002,
+    "timestamp": "2025-09-08T08:13:24.851963"
+  },
+  {
+    "epoch": 12,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "plateaued",
+      "is_stuck": false,
+      "improvement_rate": -0.12030653163661789,
+      "volatility": 0.0052007390088731715,
+      "stuck_epochs": 1,
+      "best_loss": 0.09099750032017055,
+      "current_loss": 0.1019450939712923,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 0.00020415862952895443,
+        "generation_weight": 1.0000000000000026e-05,
+        "beta": 0.0
+      },
+      "weight_impact": "negative"
+    },
+    "recommendations": [],
+    "health_score": 0.2,
+    "timestamp": "2025-09-08T08:13:24.864960"
+  },
+  {
+    "epoch": 12,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.10109634257505379,
+      "trend": "stable",
+      "improvement_rate": -0.12530893535335874,
+      "stability": 0.9946446737342695,
+      "volatility": 0.005384160200269903,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.014660195429836131,
+        "generation_weight": 0.0011200000000000001,
+        "beta": 0.1
+      }
+    },
+    "recommendations": [
+      "Reference loss is stable - training may have converged",
+      "Reference loss deteriorating - check for overfitting or learning rate issues"
+    ],
+    "health_score": 0.5978578694937078,
+    "timestamp": "2025-09-08T08:13:24.876960"
+  },
+  {
+    "epoch": 12,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.348991123803701,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.15695740853753948,
+      "pareto_front_size": 7,
+      "objectives": {
+        "mse": 0.08988120214044147,
+        "l1": 0.045640720477064176,
+        "perceptual": 0.20456858203535044,
+        "kl": 0.008900619150844946
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others",
+      "Weighted objective sum increasing - consider rebalancing"
+    ],
+    "health_score": 0.8970872225612618,
+    "timestamp": "2025-09-08T08:13:24.888961"
+  },
+  {
+    "epoch": 13,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "improving",
+      "is_stuck": false,
+      "improvement_rate": 0.25734626461315885,
+      "volatility": 0.010759210684040506,
+      "stuck_epochs": 0,
+      "best_loss": 0.07570990484214277,
+      "current_loss": 0.07570990484214277,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 0.00015759549724983501,
+        "generation_weight": 9.99999999999981e-06,
+        "beta": 0.0
+      },
+      "weight_impact": "positive"
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:24.900960"
+  },
+  {
+    "epoch": 13,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.0746578031405181,
+      "trend": "improving",
+      "improvement_rate": 0.2615182583376619,
+      "stability": 0.9892830667774102,
+      "volatility": 0.01083303008258313,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.014817790927085966,
+        "generation_weight": 0.00113,
+        "beta": 0.1
+      }
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:24.913960"
+  },
+  {
+    "epoch": 13,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.3091383956898531,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.13132983848140367,
+      "pareto_front_size": 7,
+      "objectives": {
+        "mse": 0.0635924703914702,
+        "l1": 0.04561416881854841,
+        "perceptual": 0.18887305512245062,
+        "kl": 0.011058701357383863
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others"
+    ],
+    "health_score": 0.8893989515444211,
+    "timestamp": "2025-09-08T08:13:24.926964"
+  },
+  {
+    "epoch": 14,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "improving",
+      "is_stuck": false,
+      "improvement_rate": -0.1729404045256364,
+      "volatility": 0.010710477234219147,
+      "stuck_epochs": 1,
+      "best_loss": 0.07570990484214277,
+      "current_loss": 0.08880320641214037,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 0.00010945772285633586,
+        "generation_weight": 1.0000000000000243e-05,
+        "beta": 0.0
+      },
+      "weight_impact": "negative"
+    },
+    "recommendations": [],
+    "health_score": 0.6000000000000001,
+    "timestamp": "2025-09-08T08:13:24.937962"
+  },
+  {
+    "epoch": 14,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.08771999906476594,
+      "trend": "improving",
+      "improvement_rate": -0.17496089323258893,
+      "stability": 0.9893215182764474,
+      "volatility": 0.01079374250562774,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.014927248649942302,
+        "generation_weight": 0.0011400000000000002,
+        "beta": 0.1
+      }
+    },
+    "recommendations": [
+      "Reference loss deteriorating - check for overfitting or learning rate issues"
+    ],
+    "health_score": 0.7957286073105789,
+    "timestamp": "2025-09-08T08:13:24.949964"
+  },
+  {
+    "epoch": 14,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.331675777190206,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.1439767522980413,
+      "pareto_front_size": 8,
+      "objectives": {
+        "mse": 0.07681541965205003,
+        "l1": 0.04426133992303474,
+        "perceptual": 0.19915981095587487,
+        "kl": 0.011439206659246349
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others",
+      "Weighted objective sum increasing - consider rebalancing"
+    ],
+    "health_score": 0.8931930256894124,
+    "timestamp": "2025-09-08T08:13:24.962971"
+  },
+  {
+    "epoch": 15,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "improving",
+      "is_stuck": false,
+      "improvement_rate": 0.20976451834129145,
+      "volatility": 0.007810664409740699,
+      "stuck_epochs": 0,
+      "best_loss": 0.07017544459193546,
+      "current_loss": 0.07017544459193546,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 6.0226283077970816e-05,
+        "generation_weight": 9.99999999999981e-06,
+        "beta": 0.0
+      },
+      "weight_impact": "positive"
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:24.975487"
+  },
+  {
+    "epoch": 15,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.06909394429057276,
+      "trend": "improving",
+      "improvement_rate": 0.21233532800702692,
+      "stability": 0.9922537281922771,
+      "volatility": 0.007806744976242559,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.014987474933020273,
+        "generation_weight": 0.00115,
+        "beta": 0.1
+      }
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:24.988004"
+  },
+  {
+    "epoch": 15,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.292114986214529,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.12528428992622997,
+      "pareto_front_size": 7,
+      "objectives": {
+        "mse": 0.05878362212796466,
+        "l1": 0.042291090520493235,
+        "perceptual": 0.17967136663038838,
+        "kl": 0.011368906935682783
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others"
+    ],
+    "health_score": 0.887585286977869,
+    "timestamp": "2025-09-08T08:13:25.001004"
+  },
+  {
+    "epoch": 16,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "improving",
+      "is_stuck": false,
+      "improvement_rate": -0.2713634303860348,
+      "volatility": 0.008880713832778024,
+      "stuck_epochs": 1,
+      "best_loss": 0.07017544459193546,
+      "current_loss": 0.08921849396526818,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": 1.0393082187252697e-05,
+        "generation_weight": 1.0000000000000026e-05,
+        "beta": 0.0
+      },
+      "weight_impact": "negative"
+    },
+    "recommendations": [],
+    "health_score": 0.6000000000000001,
+    "timestamp": "2025-09-08T08:13:25.018010"
+  },
+  {
+    "epoch": 16,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.08839866767424238,
+      "trend": "improving",
+      "improvement_rate": -0.27939819591835885,
+      "stability": 0.99113463539561,
+      "volatility": 0.008944662296915366,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.014997868015207525,
+        "generation_weight": 0.00116,
+        "beta": 0.1
+      }
+    },
+    "recommendations": [
+      "Reference loss deteriorating - check for overfitting or learning rate issues"
+    ],
+    "health_score": 0.796453854158244,
+    "timestamp": "2025-09-08T08:13:25.031012"
+  },
+  {
+    "epoch": 16,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.31706091476580456,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.14035156794513526,
+      "pareto_front_size": 4,
+      "objectives": {
+        "mse": 0.07830435638133955,
+        "l1": 0.040758118449543544,
+        "perceptual": 0.18930366777191354,
+        "kl": 0.008694772163007954
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others",
+      "Weighted objective sum increasing - consider rebalancing"
+    ],
+    "health_score": 0.8921054703835406,
+    "timestamp": "2025-09-08T08:13:25.045044"
+  },
+  {
+    "epoch": 17,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "worsening",
+      "is_stuck": false,
+      "improvement_rate": 0.051087975047163246,
+      "volatility": 0.008118770458192323,
+      "stuck_epochs": 2,
+      "best_loss": 0.07017544459193546,
+      "current_loss": 0.08466050177182508,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": -3.954396294518145e-05,
+        "generation_weight": 1.0000000000000026e-05,
+        "beta": 0.0
+      },
+      "weight_impact": "positive"
+    },
+    "recommendations": [
+      "Loss is worsening - consider reducing learning rate or checking for overfitting"
+    ],
+    "health_score": 0.4,
+    "timestamp": "2025-09-08T08:13:25.057041"
+  },
+  {
+    "epoch": 17,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.08379065904288413,
+      "trend": "worsening",
+      "improvement_rate": 0.0521275801162435,
+      "stability": 0.9918351654139168,
+      "volatility": 0.008232047895454281,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.014958324052262344,
+        "generation_weight": 0.00117,
+        "beta": 0.1
+      }
+    },
+    "recommendations": [
+      "Reference loss is worsening - consider fundamental training adjustments"
+    ],
+    "health_score": 0.5967340661655667,
+    "timestamp": "2025-09-08T08:13:25.071043"
+  },
+  {
+    "epoch": 17,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.3099049761520862,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.10980199075796737,
+      "pareto_front_size": 5,
+      "objectives": {
+        "mse": 0.07460037679174063,
+        "l1": 0.03623852835207769,
+        "perceptual": 0.18993541990175425,
+        "kl": 0.009130651106513636
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others"
+    ],
+    "health_score": 0.8829405972273903,
+    "timestamp": "2025-09-08T08:13:25.084560"
+  },
+  {
+    "epoch": 18,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "improving",
+      "is_stuck": false,
+      "improvement_rate": 0.18179339901357663,
+      "volatility": 0.00853490024636658,
+      "stuck_epochs": 0,
+      "best_loss": 0.06926978139253007,
+      "current_loss": 0.06926978139253007,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": -8.908589787136843e-05,
+        "generation_weight": 1.0000000000000026e-05,
+        "beta": 0.0
+      },
+      "weight_impact": "positive"
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:25.097560"
+  },
+  {
+    "epoch": 18,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.06816071357279939,
+      "trend": "improving",
+      "improvement_rate": 0.1865356550314913,
+      "stability": 0.9914134480251854,
+      "volatility": 0.008660919409473852,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.014869238154390976,
+        "generation_weight": 0.00118,
+        "beta": 0.1
+      }
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:25.111557"
+  },
+  {
+    "epoch": 18,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.3174000384280212,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.051812255099087934,
+      "pareto_front_size": 6,
+      "objectives": {
+        "mse": 0.05773802895653165,
+        "l1": 0.04149463837085771,
+        "perceptual": 0.20648791498040353,
+        "kl": 0.011679456120228356
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others",
+      "Weighted objective sum increasing - consider rebalancing"
+    ],
+    "health_score": 0.8655436765297264,
+    "timestamp": "2025-09-08T08:13:25.124562"
+  },
+  {
+    "epoch": 19,
+    "method": "standard",
+    "analysis_data": {
+      "trend": "improving",
+      "is_stuck": false,
+      "improvement_rate": 0.016607567921869813,
+      "volatility": 0.007541046562580037,
+      "stuck_epochs": 0,
+      "best_loss": 0.06811937879312055,
+      "current_loss": 0.06811937879312055,
+      "weight_changes": {
+        "mse_weight": 0.0,
+        "l1_weight": 0.0,
+        "perceptual_weight": -0.0001377377159539027,
+        "generation_weight": 9.99999999999981e-06,
+        "beta": 0.0
+      },
+      "weight_impact": "positive"
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:25.138557"
+  },
+  {
+    "epoch": 19,
+    "method": "constant_weight",
+    "analysis_data": {
+      "reference_loss": 0.06716093535708864,
+      "trend": "improving",
+      "improvement_rate": 0.014667954064813736,
+      "stability": 0.9924429205086313,
+      "volatility": 0.007614623808788658,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "current_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.014731500438437073,
+        "generation_weight": 0.0011899999999999999,
+        "beta": 0.1
+      }
+    },
+    "recommendations": [],
+    "health_score": 1.0,
+    "timestamp": "2025-09-08T08:13:25.152562"
+  },
+  {
+    "epoch": 19,
+    "method": "pareto",
+    "analysis_data": {
+      "is_pareto_optimal": true,
+      "weighted_sum": 0.29724132366030426,
+      "distance_to_front": 0.0,
+      "objective_balance": 0.05151314255075934,
+      "pareto_front_size": 7,
+      "objectives": {
+        "mse": 0.057887278931381576,
+        "l1": 0.036495112367551326,
+        "perceptual": 0.1928090649767604,
+        "kl": 0.010049867384610951
+      },
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 1.0,
+        "perceptual": 1.0,
+        "kl": 1.0
+      }
+    },
+    "recommendations": [
+      "Poor objective balance - some objectives dominating others"
+    ],
+    "health_score": 0.8654539427652278,
+    "timestamp": "2025-09-08T08:13:25.166556"
+  }
+]

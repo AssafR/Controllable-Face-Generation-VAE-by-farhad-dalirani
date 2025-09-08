@@ -173,7 +173,19 @@ class TrainingReporter:
             return f"stage-based ({info['stage']})"
         elif info['type'] == 'scheduled':
             # Use higher precision so small scheduled values (e.g., 0.001) are visible
-            return f"scheduled ({info['start']:.4f} → {info['end']:.4f})"
+            label = f"scheduled ({info['start']:.4f} → {info['end']:.4f})"
+            # Append progress percentage through warmup if available
+            if 'progress' in info:
+                pct = int(round(info['progress'] * 100))
+                label += f", {pct}%"
+            # For cyclical KL show phase up/down and position
+            if 'phase' in info:
+                phase = info['phase']
+                if 'cycle_pos' in info and 'cycle_period' in info:
+                    label += f", {phase} (pos {info['cycle_pos']}/{info['cycle_period']})"
+                else:
+                    label += f", {phase}"
+            return label
         else:
             return 'fixed'
     
@@ -230,12 +242,30 @@ class TrainingReporter:
         all_weights = self.loss_manager.get_all_weights()
         weight_info = {loss_type: self.loss_manager.get_weight_info(loss_type) for loss_type in all_weights.keys()}
         
+        # Check for active priority phases using the centralized manager
+        priority_info = self.loss_manager.priority_manager.get_display_info(epoch)
+        
+        for loss_type, info in priority_info.items():
+            if info['is_active']:
+                lines.append(f"  🎯 {info['message']}")
+                lines.append(f"  📊 Other objectives suppressed during {loss_type.upper()} priority phase")
+            elif info['is_transition']:
+                lines.append(f"  🔄 {info['message']}")
+                lines.append(f"  📊 Other objectives gradually ramping up")
+        
         for loss_type, weight in all_weights.items():
             if weight > 0:  # Only show non-zero weights
                 info = weight_info[loss_type]
                 icon = self.get_loss_icon(loss_type)
                 display_name = self.get_loss_display_name(loss_type)
                 type_label = self.get_type_label(info)
+                
+                # Add priority indicators using the centralized manager
+                priority_info = self.loss_manager.priority_manager.get_display_info(epoch)
+                for loss_type_name, info in priority_info.items():
+                    if info['is_active'] and loss_type == f"{loss_type_name}_weight":
+                        type_label += f" (PRIORITY ×{info['multiplier']:.1f})"
+                
                 lines.append(f"  {icon} {display_name:<12} {weight:.3f} ({type_label})")
         
         # Loss breakdown
@@ -288,11 +318,7 @@ class TrainingReporter:
             # Update adaptive MSE/L1 control
             self.loss_manager.update_mse_l1_contribution(mse_contrib / 100.0, l1_contrib / 100.0)
         
-        # Check for stuck training and accelerate scheduled updates if needed
-        acceleration_applied = self.loss_manager.check_stuck_training(total_loss)
-        if acceleration_applied:
-            print(f"  ⚡ Schedule acceleration activated - weights will update faster")
-        
+        # Note: Stuck detection and acceleration are now handled by the loss analysis system
         # Show acceleration status in summary
         if self.loss_manager.is_acceleration_active():
             accel_info = self.loss_manager.get_acceleration_info()

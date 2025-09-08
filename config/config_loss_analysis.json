@@ -1,0 +1,82 @@
+{
+  "_comment": "Loss Analysis System Configuration",
+  "_description": "Configuration for the unified extensible loss analysis system",
+  
+  "loss_analysis": {
+    "stuck_threshold": 0.001,
+    "stuck_patience": 5,
+    "trend_window": 10,
+    "enable_logging": true,
+    "log_file": "loss_analysis.json",
+    "save_plots": true,
+    "plot_dir": "loss_analysis_plots",
+    
+    "reference_weights": {
+      "mse_weight": 1.0,
+      "l1_weight": 0.2,
+      "perceptual_weight": 0.01,
+      "generation_weight": 0.001,
+      "beta": 0.0
+    },
+    
+    "pareto_objectives": ["mse", "l1", "perceptual", "kl"],
+    "pareto_weights": {
+      "mse": 1.0,
+      "l1": 1.0,
+      "perceptual": 1.0,
+      "kl": 1.0
+    },
+    "pareto_tolerance": 0.01
+  },
+  
+  "loss_analysis_presets": {
+    "basic": {
+      "stuck_threshold": 0.001,
+      "stuck_patience": 5,
+      "trend_window": 10,
+      "enable_logging": true,
+      "save_plots": false
+    },
+    
+    "detailed": {
+      "stuck_threshold": 0.0005,
+      "stuck_patience": 3,
+      "trend_window": 15,
+      "enable_logging": true,
+      "save_plots": true,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "pareto_objectives": ["mse", "l1", "perceptual", "kl"],
+      "pareto_tolerance": 0.005
+    },
+    
+    "research": {
+      "stuck_threshold": 0.0001,
+      "stuck_patience": 2,
+      "trend_window": 20,
+      "enable_logging": true,
+      "save_plots": true,
+      "reference_weights": {
+        "mse_weight": 1.0,
+        "l1_weight": 0.2,
+        "perceptual_weight": 0.01,
+        "generation_weight": 0.001,
+        "beta": 0.0
+      },
+      "pareto_objectives": ["mse", "l1", "perceptual", "generation_quality", "kl"],
+      "pareto_weights": {
+        "mse": 1.0,
+        "l1": 0.8,
+        "perceptual": 1.2,
+        "generation_quality": 0.5,
+        "kl": 1.0
+      },
+      "pareto_tolerance": 0.001
+    }
+  }
+}

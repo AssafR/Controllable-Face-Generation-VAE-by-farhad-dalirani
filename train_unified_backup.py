@@ -83,9 +83,8 @@ class UnifiedVAETrainer:
         # Initialize training utilities
         self.utilities = create_training_utilities(config, device)
         
-        # Initialize loss analysis system (gated by enable flag)
-        self.enable_loss_analysis = bool(config.get('enable_loss_analysis', False))
-        self.loss_analysis_system = create_loss_analysis_system(config.get('loss_analysis', {})) if self.enable_loss_analysis else None
+        # Initialize loss analysis system
+        self.loss_analysis_system = create_loss_analysis_system(config.get('loss_analysis', {}))
         
         # Initialize loss history tracking
         self.loss_history = {
@@ -328,8 +327,6 @@ class UnifiedVAETrainer:
         Returns:
             Dictionary containing detailed analysis results
         """
-        if not self.enable_loss_analysis or self.loss_analysis_system is None:
-            return {}
         current_weights = self.loss_manager.get_all_weights()
         selected_methods = self.config.get('loss_analysis_methods', ['standard', 'constant_weight', 'pareto'])
         # Convert string method names to AnalysisMethod enums
@@ -352,8 +349,6 @@ class UnifiedVAETrainer:
             train_metrics: Training metrics dictionary
             val_metrics: Validation metrics dictionary
         """
-        if not self.enable_loss_analysis or self.loss_analysis_system is None:
-            return
         analysis_summary = self.get_detailed_loss_analysis(epoch, train_metrics, val_metrics)
         
         print(f"\n📊 DETAILED LOSS ANALYSIS REPORT - EPOCH {epoch+1}")
@@ -632,7 +627,7 @@ class UnifiedVAETrainer:
         try:
             for epoch in range(self.start_epoch, self.config['max_epoch']):
                 # Process a single epoch
-                should_stop = self._process_epoch_full(epoch, train_loader, val_loader, start_time, early_stopping_patience)
+                should_stop = self._process_epoch(epoch, train_loader, val_loader, start_time, early_stopping_patience)
                 if should_stop:
                     break
             
@@ -643,34 +638,36 @@ class UnifiedVAETrainer:
             
             # Generate final samples
             print(f"\n🎨 Generating final samples...")
-            # Use suffix-based saving inside generate_samples
-            self.generate_samples(self.config['max_epoch']-1, val_loader.dataset, suffix="_final")
+            final_path = f"sample_images/final_samples_{self.config.get('config_name', 'unified')}.png"
+            self.generate_samples(self.config['max_epoch']-1, val_loader.dataset, 
+                                  save_path=final_path)
+            print(f"  ✅ Final samples saved: {final_path}")
         
         finally:
             # Ensure writer is properly closed
             if self.writer is not None:
                 self.writer.close()
     
-    def _process_epoch_full(self, epoch, train_loader, val_loader, start_time, early_stopping_patience):
+    def _process_epoch(self, epoch, train_loader, val_loader, start_time, early_stopping_patience):
         """Process a single training epoch with all analysis and decisions."""
-        # Update current epoch for weight scheduling
-        self.loss_manager.set_epoch(epoch)
-    
-        # Training phase
-        train_metrics = self.train_epoch(train_loader, epoch)
-        
-        # Generate mid-epoch samples for closer monitoring
-        if epoch > 0 and epoch % 2 == 0:  # Every 2 epochs after the first
-            print(f"  🔍 Generating mid-epoch samples...")
-            self.generate_samples(epoch, val_loader.dataset, suffix="_mid_epoch")
-        
-        # Validation phase
-        val_metrics = self.validate_epoch(val_loader, epoch)
+                # Update current epoch for weight scheduling
+                self.loss_manager.set_epoch(epoch)
+            
+                # Training phase
+                train_metrics = self.train_epoch(train_loader, epoch)
+                
+                # Generate mid-epoch samples for closer monitoring
+                if epoch > 0 and epoch % 2 == 0:  # Every 2 epochs after the first
+                    print(f"  🔍 Generating mid-epoch samples...")
+                    self.generate_samples(epoch, val_loader.dataset, suffix="_mid_epoch")
+                
+                # Validation phase
+                val_metrics = self.validate_epoch(val_loader, epoch)
             
         # Learning rate scheduling - use validation loss for basic scheduling
         val_loss = val_metrics.get('loss', 0)
         self.scheduler.step(val_loss)
-        current_lr = self.optimizer.param_groups[0]['lr']
+                current_lr = self.optimizer.param_groups[0]['lr']
                 
                 # Logging
         self._log_epoch_metrics(epoch, train_metrics, val_metrics, current_lr)
@@ -688,7 +685,7 @@ class UnifiedVAETrainer:
         # Save best model and checkpoint
         is_best = self._save_best_model(epoch, val_metrics, analysis_results)
         self.utilities.save_checkpoint(self.model, self.optimizer, self.scheduler, epoch, train_metrics, val_metrics, is_best)
-        
+    
         # Generate sample images for every epoch
         self.generate_samples(epoch, val_loader.dataset)
         
@@ -710,37 +707,37 @@ class UnifiedVAETrainer:
     
     def _log_epoch_metrics(self, epoch, train_metrics, val_metrics, current_lr):
         """Log epoch metrics to tensorboard."""
-        if self.writer is not None:
-            # Get current weights for logging
-            weights = self.loss_manager.get_all_weights()
-            
-            # Log all epoch metrics
-            self.writer.log_epoch_metrics(epoch, train_metrics, val_metrics, weights)
-            self.writer.log_learning_rate(epoch, current_lr)
-            self.writer.log_beta(epoch, self.loss_manager.get_weight('beta'))
-            
-            # Log training stage if using stage-based training
-            if self.config.get('stage_based_training', False):
-                stage_name = self.loss_manager.get_current_stage_name()
-                self.writer.log_stage(epoch, stage_name)
-            
-            # Log GPU memory usage
-            if torch.cuda.is_available():
-                gpu_memory_allocated = torch.cuda.memory_allocated(self.device) / 1024**3
-                gpu_memory_total = torch.cuda.get_device_properties(self.device).total_memory / 1024**3
-                gpu_utilization = (gpu_memory_allocated / gpu_memory_total) * 100
-                self.writer.log_gpu_memory(epoch, gpu_memory_allocated, gpu_memory_total, gpu_utilization)
+                if self.writer is not None:
+                    # Get current weights for logging
+                    weights = self.loss_manager.get_all_weights()
+                    
+                    # Log all epoch metrics
+                    self.writer.log_epoch_metrics(epoch, train_metrics, val_metrics, weights)
+                    self.writer.log_learning_rate(epoch, current_lr)
+                    self.writer.log_beta(epoch, self.loss_manager.get_weight('beta'))
+                    
+                    # Log training stage if using stage-based training
+                    if self.config.get('stage_based_training', False):
+                        stage_name = self.loss_manager.get_current_stage_name()
+                        self.writer.log_stage(epoch, stage_name)
+                    
+                    # Log GPU memory usage
+                    if torch.cuda.is_available():
+                        gpu_memory_allocated = torch.cuda.memory_allocated(self.device) / 1024**3
+                        gpu_memory_total = torch.cuda.get_device_properties(self.device).total_memory / 1024**3
+                        gpu_utilization = (gpu_memory_allocated / gpu_memory_total) * 100
+                        self.writer.log_gpu_memory(epoch, gpu_memory_allocated, gpu_memory_total, gpu_utilization)
             
     def _get_gpu_statistics(self):
         """Get GPU memory statistics."""
-        if torch.cuda.is_available():
-            gpu_memory_allocated = torch.cuda.memory_allocated(self.device) / 1024**3  # GB
-            gpu_memory_reserved = torch.cuda.memory_reserved(self.device) / 1024**3   # GB
-            gpu_memory_total = torch.cuda.get_device_properties(self.device).total_memory / 1024**3  # GB
-            gpu_utilization = (gpu_memory_allocated / gpu_memory_total) * 100
-        else:
-            gpu_memory_allocated = gpu_memory_reserved = gpu_memory_total = gpu_utilization = 0
-        
+                if torch.cuda.is_available():
+                    gpu_memory_allocated = torch.cuda.memory_allocated(self.device) / 1024**3  # GB
+                    gpu_memory_reserved = torch.cuda.memory_reserved(self.device) / 1024**3   # GB
+                    gpu_memory_total = torch.cuda.get_device_properties(self.device).total_memory / 1024**3  # GB
+                    gpu_utilization = (gpu_memory_allocated / gpu_memory_total) * 100
+                else:
+                    gpu_memory_allocated = gpu_memory_reserved = gpu_memory_total = gpu_utilization = 0
+                
         return {
             'allocated': gpu_memory_allocated,
             'reserved': gpu_memory_reserved,
@@ -750,48 +747,46 @@ class UnifiedVAETrainer:
     
     def _print_epoch_summary(self, epoch, train_metrics, val_metrics, current_lr, gpu_stats):
         """Print epoch summary and control information."""
-        # Print epoch summary using the centralized reporter
-        summary = self.reporter.format_epoch_summary(
-            epoch=epoch,
-            max_epochs=self.config['max_epoch'],
-            train_metrics=train_metrics,
-            val_metrics=val_metrics,
-            current_lr=current_lr,
+                # Print epoch summary using the centralized reporter
+                summary = self.reporter.format_epoch_summary(
+                    epoch=epoch,
+                    max_epochs=self.config['max_epoch'],
+                    train_metrics=train_metrics,
+                    val_metrics=val_metrics,
+                    current_lr=current_lr,
             gpu_memory_allocated=gpu_stats['allocated'],
             gpu_memory_total=gpu_stats['total'],
             gpu_utilization=gpu_stats['utilization']
-        )
-        print(summary)
-        
-        # Compact control summary: patience and acceleration state
-        accel_info = self.loss_manager.get_acceleration_info()
-        accel_on = 'on' if accel_info.get('active', False) else 'off'
-        accel_factor = accel_info.get('factor', 1.0)
+                )
+                print(summary)
+                
+                # Compact control summary: patience and acceleration state
+                accel_info = self.loss_manager.get_acceleration_info()
+                accel_on = 'on' if accel_info.get('active', False) else 'off'
+                accel_factor = accel_info.get('factor', 1.0)
         print(f"  🔧 Control: Patience {self.patience_counter}/{12} | Accel: {accel_on} ({accel_factor:.1f}x)")
                 
     def _handle_acceleration_state_changes(self, early_stopping_patience):
         """Handle acceleration state changes and reset patience if needed."""
-        accel_active = self.loss_manager.is_acceleration_active()
-        if accel_active != self.prev_accel_active:
-            self.patience_counter = 0
-            state = "activated" if accel_active else "deactivated"
-            print(f"  ♻️ Early-stopping patience reset ({state})")
-            # Optional: reduce LR when acceleration activates to help recovery
-            if accel_active and self.config.get('lr_on_acceleration', False):
-                factor = float(self.config.get('lr_accel_factor', 0.5))
-                lr_min = float(self.config.get('lr_min', 1e-6))
-                for g in self.optimizer.param_groups:
-                    g['lr'] = max(lr_min, g['lr'] * factor)
-                new_lr = self.optimizer.param_groups[0]['lr']
-                print(f"  🔻 Learning rate reduced on acceleration: {new_lr:.2e}")
-            self.prev_accel_active = accel_active
+                accel_active = self.loss_manager.is_acceleration_active()
+                if accel_active != self.prev_accel_active:
+                    self.patience_counter = 0
+                    state = "activated" if accel_active else "deactivated"
+                    print(f"  ♻️ Early-stopping patience reset ({state})")
+                    # Optional: reduce LR when acceleration activates to help recovery
+                    if accel_active and self.config.get('lr_on_acceleration', False):
+                        factor = float(self.config.get('lr_accel_factor', 0.5))
+                        lr_min = float(self.config.get('lr_min', 1e-6))
+                        for g in self.optimizer.param_groups:
+                            g['lr'] = max(lr_min, g['lr'] * factor)
+                        new_lr = self.optimizer.param_groups[0]['lr']
+                        print(f"  🔻 Learning rate reduced on acceleration: {new_lr:.2e}")
+                    self.prev_accel_active = accel_active
             
     def _run_loss_analysis(self, epoch, train_metrics, val_metrics):
         """Run loss analysis and apply decisions."""
-        if not self.enable_loss_analysis or self.loss_analysis_system is None:
-            return {}
-        # Comprehensive loss behavior assessment
-        self.utilities.assess_loss_behavior(train_metrics, val_metrics, epoch)
+                # Comprehensive loss behavior assessment
+                self.utilities.assess_loss_behavior(train_metrics, val_metrics, epoch)
                 
         # Run loss analysis using the unified system
         current_weights = self.loss_manager.get_all_weights()
@@ -857,23 +852,23 @@ class UnifiedVAETrainer:
                 print(f"  ✅ Analysis-based best model! (trend: {trend}, rate: {improvement_rate:.3f})")
         
                 if is_best:
-                    self.best_ref_val = val_loss
+            self.best_ref_val = val_loss
                     self.patience_counter = 0
-                    print(f"  ✅ New best model! (validation loss = {val_loss:.6f})")
+            print(f"  ✅ New best model! (validation loss = {val_loss:.6f})")
                 else:
                     self.patience_counter += 1
-                    print(f"  ⏳ No improvement ({self.patience_counter}/12)")
+            print(f"  ⏳ No improvement ({self.patience_counter}/12)")
         
         return is_best
     
     def _print_time_estimation(self, start_time, epoch):
         """Print time estimation for remaining training."""
-        elapsed_time = time.time() - start_time
-        if epoch > 0:
-            avg_time_per_epoch = elapsed_time / (epoch + 1)
-            remaining_epochs = self.config['max_epoch'] - (epoch + 1)
-            estimated_remaining = remaining_epochs * avg_time_per_epoch
-            print(f"  ⏱️  Time: {elapsed_time/3600:.1f}h elapsed, ~{estimated_remaining/3600:.1f}h remaining")
+                elapsed_time = time.time() - start_time
+                if epoch > 0:
+                    avg_time_per_epoch = elapsed_time / (epoch + 1)
+                    remaining_epochs = self.config['max_epoch'] - (epoch + 1)
+                    estimated_remaining = remaining_epochs * avg_time_per_epoch
+                    print(f"  ⏱️  Time: {elapsed_time/3600:.1f}h elapsed, ~{estimated_remaining/3600:.1f}h remaining")
             
 
 def main():
@@ -887,14 +882,14 @@ def main():
     available_dataset_presets = [k for k in config_loader.unified_config['dataset_presets'].keys() if not k.startswith('_')]
     
     parser = argparse.ArgumentParser(description='Unified VAE Training Script')
-    parser.add_argument('--loss-preset', choices=available_loss_presets, default='mse_l1',
-                       help='Loss configuration preset (default: mse_l1)')
+    parser.add_argument('--loss-preset', choices=available_loss_presets, default='balanced',
+                       help='Loss configuration preset (default: balanced)')
     parser.add_argument('--training-preset', choices=available_training_presets, default='standard_training',
                        help='Training configuration preset (default: standard_training)')
-    parser.add_argument('--model-preset', choices=available_model_presets, default='medium',
-                       help='Model configuration preset (default: medium)')
-    parser.add_argument('--dataset-preset', choices=available_dataset_presets, default='full',
-                       help='Dataset configuration preset (default: full)')
+    parser.add_argument('--model-preset', choices=available_model_presets, default='standard',
+                       help='Model configuration preset (default: standard)')
+    parser.add_argument('--dataset-preset', choices=available_dataset_presets, default='celeba',
+                       help='Dataset configuration preset (default: celeba)')
     parser.add_argument('--no-resume', action='store_true',
                        help='Start training from scratch (clear checkpoints)')
     parser.add_argument('--loss-analysis-interval', type=int, default=5,
@@ -928,6 +923,216 @@ def main():
     
     # Create and run trainer
     trainer = UnifiedVAETrainer(config)
+    trainer.train(resume=not args.no_resume)
+
+
+if __name__ == "__main__":
+    main()
+        print(f"  🔧 Control: Patience {self.patience_counter}/{12} | Accel: {accel_on} ({accel_factor:.1f}x)")
+    
+    def _handle_acceleration_state_changes(self, early_stopping_patience):
+        """Handle acceleration state changes and reset patience if needed."""
+        accel_active = self.loss_manager.is_acceleration_active()
+        if accel_active != self.prev_accel_active:
+            self.patience_counter = 0
+            state = "activated" if accel_active else "deactivated"
+            print(f"  ♻️ Early-stopping patience reset ({state})")
+            # Optional: reduce LR when acceleration activates to help recovery
+            if accel_active and self.config.get('lr_on_acceleration', False):
+                factor = float(self.config.get('lr_accel_factor', 0.5))
+                lr_min = float(self.config.get('lr_min', 1e-6))
+                for g in self.optimizer.param_groups:
+                    g['lr'] = max(lr_min, g['lr'] * factor)
+                new_lr = self.optimizer.param_groups[0]['lr']
+                print(f"  🔻 Learning rate reduced on acceleration: {new_lr:.2e}")
+            self.prev_accel_active = accel_active
+    
+    def _run_loss_analysis(self, epoch, train_metrics, val_metrics):
+        """Run loss analysis and apply decisions."""
+        # Comprehensive loss behavior assessment
+        self.utilities.assess_loss_behavior(train_metrics, val_metrics, epoch)
+        
+        # Run loss analysis using the unified system
+        current_weights = self.loss_manager.get_all_weights()
+        selected_methods = self.config.get('loss_analysis_methods', ['standard', 'constant_weight', 'pareto'])
+        # Convert string method names to AnalysisMethod enums
+        from loss_analysis_system import AnalysisMethod
+        method_enums = [AnalysisMethod(method) for method in selected_methods]
+        
+        # Prepare additional context for loss analysis using the centralized manager
+        additional_context = self.loss_manager.priority_manager.get_context_for_analysis(epoch)
+        
+        analysis_results = self.loss_analysis_system.analyze_epoch(
+            epoch, train_metrics, val_metrics, current_weights, method_enums, additional_context
+        )
+        
+        # Use loss analysis for in-training decisions
+        if analysis_results:
+            # Get user-friendly summary
+            user_summary = self.loss_analysis_system.get_user_friendly_summary(analysis_results)
+            
+            # Use loss analysis for in-training decisions
+            self._apply_loss_analysis_decisions(analysis_results, epoch)
+            
+            # Show user-friendly analysis results
+            active_methods = list(analysis_results.keys())
+            method_icons = {
+                'standard': '📈',
+                'constant_weight': '⚖️', 
+                'pareto': '🎯'
+            }
+            method_display = [f"{method_icons.get(method.value, '📊')}{method.value}" for method in active_methods]
+            
+            print(f"  📊 Loss Analysis ({', '.join(method_display)}): {user_summary['status']} ({user_summary['health_score']:.2f})")
+            print(f"  💬 {user_summary['message']}")
+            
+            # Show priority actions
+            if user_summary['priority_actions']:
+                print(f"  🎯 Priority Actions:")
+                for action in user_summary['priority_actions']:
+                    priority_icon = {'high': '🔴', 'medium': '🟡', 'low': '🟢'}.get(action['priority'], '⚪')
+                    print(f"    {priority_icon} {action['action']} - {action['reason']}")
+            
+            # Show health indicators
+            if user_summary['health_indicators']:
+                print(f"  📋 Health Indicators: {'; '.join(user_summary['health_indicators'])}")
+        
+        return analysis_results
+    
+    def _save_best_model(self, epoch, val_metrics, analysis_results):
+        """Save best model based on validation loss and analysis."""
+        val_loss = val_metrics.get('loss', 0)
+        is_best = val_loss < self.best_ref_val
+        
+        # Enhanced best model detection using loss analysis
+        if analysis_results and AnalysisMethod.STANDARD in analysis_results:
+            standard_analysis = analysis_results[AnalysisMethod.STANDARD]
+            trend = standard_analysis.analysis_data.get('trend', 'unknown')
+            improvement_rate = standard_analysis.analysis_data.get('improvement_rate', 0)
+            
+            # Consider it "best" if loss is lower OR if analysis shows improvement trend
+            if not is_best and trend == 'improving' and improvement_rate > 0.01:
+                is_best = True
+                print(f"  ✅ Analysis-based best model! (trend: {trend}, rate: {improvement_rate:.3f})")
+        
+        if is_best:
+            self.best_ref_val = val_loss
+            self.patience_counter = 0
+            print(f"  ✅ New best model! (validation loss = {val_loss:.6f})")
+        else:
+            self.patience_counter += 1
+            print(f"  ⏳ No improvement ({self.patience_counter}/12)")
+        
+        return is_best
+    
+    def _print_time_estimation(self, start_time, epoch):
+        """Print time estimation for remaining training."""
+        elapsed_time = time.time() - start_time
+        if epoch > 0:
+            avg_time_per_epoch = elapsed_time / (epoch + 1)
+            remaining_epochs = self.config['max_epoch'] - (epoch + 1)
+            estimated_remaining = remaining_epochs * avg_time_per_epoch
+            print(f"  ⏱️  Time: {elapsed_time/3600:.1f}h elapsed, ~{estimated_remaining/3600:.1f}h remaining")
+
+
+def main():
+    """Main function with command-line argument parsing."""
+    # Load available presets dynamically from config
+    config_loader = ConfigLoader('config/config_unified.json')
+    # Filter out comment entries and other non-preset keys
+    available_loss_presets = [k for k in config_loader.unified_config['loss_presets'].keys() if not k.startswith('_')]
+    available_training_presets = [k for k in config_loader.unified_config['training_presets'].keys() if not k.startswith('_')]
+    available_model_presets = [k for k in config_loader.unified_config['model_presets'].keys() if not k.startswith('_')]
+    available_dataset_presets = [k for k in config_loader.unified_config['dataset_presets'].keys() if not k.startswith('_')]
+    
+    parser = argparse.ArgumentParser(description='Unified VAE Training Script')
+    parser.add_argument('--loss-preset', type=str, default='high_quality',
+                       choices=available_loss_presets,
+                       help='Loss function preset')
+    parser.add_argument('--training-preset', type=str, default='fast_high_quality_training',
+                       choices=available_training_presets,
+                       help='Training configuration preset')
+    parser.add_argument('--model-preset', type=str, default='fast_high_quality',
+                       choices=available_model_presets,
+                       help='Model architecture preset')
+    parser.add_argument('--dataset-preset', type=str, default='full',
+                       choices=available_dataset_presets,
+                       help='Dataset size preset')
+    parser.add_argument('--no-resume', action='store_true',
+                       help='Start fresh training (ignore checkpoints)')
+    parser.add_argument('--batch-size', type=int, default=None,
+                       help='Override batch size (e.g., 128, 256, 384)')
+    parser.add_argument('--lr', '--learning-rate', type=float, default=None,
+                       help='Override learning rate (e.g., 0.001, 0.0001, 0.00001)')
+    parser.add_argument('--device', type=str, default='cuda',
+                       help='Device to use for training')
+    parser.add_argument('--loss-analysis-interval', type=int, default=5,
+                       help='Interval for detailed loss analysis reports (epochs)')
+    parser.add_argument('--enable-loss-analysis', action='store_true',
+                       help='Enable detailed loss analysis system')
+    parser.add_argument('--loss-analysis-methods', nargs='+', 
+                       choices=['standard', 'constant_weight', 'pareto'],
+                       default=['standard', 'constant_weight', 'pareto'],
+                       help='Loss analysis methods to use (default: all)')
+    parser.add_argument('--loss-analysis-preset', type=str, default='standard',
+                       choices=['none', 'basic', 'standard', 'detailed', 'research'],
+                       help='Loss analysis configuration preset')
+    
+    args = parser.parse_args()
+    
+    # Load configuration
+    config_loader = ConfigLoader("config/config_unified.json")
+    config = config_loader.get_config(
+        loss_preset=args.loss_preset,
+        training_preset=args.training_preset,
+        model_preset=args.model_preset,
+        dataset_preset=args.dataset_preset,
+        loss_analysis_preset=args.loss_analysis_preset
+    )
+    
+    # Override batch size if specified
+    if args.batch_size:
+        config['batch_size'] = args.batch_size
+        config['_user_override_batch_size'] = True
+        print(f"📊 Batch size overridden to: {args.batch_size}")
+    
+    # Override learning rate if specified
+    if args.lr:
+        config['lr'] = args.lr
+        print(f"📈 Learning rate overridden to: {args.lr}")
+    
+    # Set config name for filenames (include both model and training presets)
+    config['config_name'] = f"{args.model_preset}_{args.training_preset}"
+    
+    # Configure loss analysis
+    if args.enable_loss_analysis or config.get('loss_analysis', {}).get('enabled', False):
+        # Use preset configuration if available, otherwise use command line args
+        if 'loss_analysis' in config and config['loss_analysis'].get('enabled', False):
+            # Use preset configuration
+            analysis_config = config['loss_analysis']
+            print(f"📊 Loss analysis enabled via preset '{args.loss_analysis_preset}'")
+            if 'methods' in analysis_config:
+                print(f"📊 Analysis methods: {', '.join(analysis_config['methods'])}")
+            if 'interval' in analysis_config:
+                print(f"📊 Report interval: Every {analysis_config['interval']} epochs")
+        else:
+            # Fallback to command line configuration
+            config['loss_analysis'] = config.get('loss_analysis', {})
+            config['loss_analysis']['enable_logging'] = True
+            config['loss_analysis']['save_plots'] = True
+            config['loss_analysis_interval'] = args.loss_analysis_interval
+            config['loss_analysis_methods'] = args.loss_analysis_methods
+            print(f"📊 Loss analysis enabled via command line (interval: {args.loss_analysis_interval} epochs)")
+            print(f"📊 Analysis methods: {', '.join(args.loss_analysis_methods)}")
+    else:
+        print(f"📊 Loss analysis disabled")
+    
+    # Configure GPU
+    device = configure_gpu() if args.device == 'cuda' else torch.device(args.device)
+    print(f"✅ Using device: {device}")
+    
+    # Create trainer and start training
+    trainer = UnifiedVAETrainer(config, device)
     trainer.train(resume=not args.no_resume)
 
 
