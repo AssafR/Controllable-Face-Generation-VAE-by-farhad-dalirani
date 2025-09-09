@@ -13,8 +13,8 @@ class Sampler(nn.Module):
     
     def forward(self, emb_mean, emb_log_var):
         # Use reparameterization trick to sample from the distribution
-        # Clamp log_var to prevent overflow in exp
-        emb_log_var = torch.clamp(emb_log_var, min=-10, max=10)
+        # Clamp log_var to prevent overflow/underflow in exp (stability guard)
+        emb_log_var = torch.clamp(emb_log_var, min=-15, max=15)
         noise = torch.randn_like(emb_mean)
         return emb_mean + torch.exp(0.5 * emb_log_var) * noise
 
@@ -240,8 +240,8 @@ class VAE_pt(nn.Module):
         """Calculate KL divergence loss (numerically stable)"""
         # Use numerically stable KL divergence calculation
         # KL = 0.5 * sum(1 + log_var - mean^2 - exp(log_var))
-        # Clamp log_var to prevent overflow
-        emb_log_var = torch.clamp(emb_log_var, min=-10, max=10)
+        # Clamp log_var to prevent overflow/underflow
+        emb_log_var = torch.clamp(emb_log_var, min=-15, max=15)
         return torch.mean(torch.sum(
             -0.5 * (1 + emb_log_var - emb_mean.pow(2) - emb_log_var.exp()), 
             dim=1))

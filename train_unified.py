@@ -239,6 +239,11 @@ class UnifiedVAETrainer:
         with torch.no_grad() if not is_training else torch.enable_grad():
             for batch_idx, images in enumerate(pbar):
                 images = images.to(self.device)
+                # Input validation and sanitization to prevent NaNs propagating
+                if not torch.isfinite(images).all():
+                    images = torch.nan_to_num(images, nan=0.0, posinf=1.0, neginf=0.0)
+                # Clamp to valid image range [0,1]
+                images = images.clamp(0.0, 1.0)
                 
                 if is_training:
                     # Zero gradients for training
@@ -247,8 +252,47 @@ class UnifiedVAETrainer:
                 # Forward pass
                 emb_mean, emb_log_var, reconst = self.model(images)
                 
+                # Immediate numerical checks
+                def _tensor_stats(t):
+                    try:
+                        return (
+                            float(torch.nan_to_num(t, nan=0.0, posinf=0.0, neginf=0.0).min().item()),
+                            float(torch.nan_to_num(t, nan=0.0, posinf=0.0, neginf=0.0).max().item()),
+                            float(torch.nan_to_num(t, nan=0.0, posinf=0.0, neginf=0.0).abs().max().item()),
+                        )
+                    except Exception:
+                        return (0.0, 0.0, 0.0)
+                
                 # Calculate losses
                 total_loss, loss_dict = self.calculate_losses(images, reconst, emb_mean, emb_log_var)
+                
+                # Detect NaN/Inf in loss and diagnose before backward
+                if not torch.isfinite(total_loss):
+                    print("  ❌ Non-finite total loss detected. Diagnostics:")
+                    # Report component values
+                    for k, v in loss_dict.items():
+                        try:
+                            fin = (float('nan') if not (v == v) else float(v))  # NaN check via v==v
+                        except Exception:
+                            fin = v
+                        print(f"    • {k}: {fin}")
+                    # Report tensor ranges
+                    imin, imax, imaxabs = _tensor_stats(images)
+                    mmin, mmax, mmaxabs = _tensor_stats(emb_mean)
+                    lvmin, lvmax, lvmaxabs = _tensor_stats(emb_log_var)
+                    rmin, rmax, rmaxabs = _tensor_stats(reconst)
+                    print(f"    • images   range: [{imin:.3e}, {imax:.3e}] | max|x|={imaxabs:.3e}")
+                    print(f"    • emb_mean range: [{mmin:.3e}, {mmax:.3e}] | max|x|={mmaxabs:.3e}")
+                    print(f"    • emb_logv range: [{lvmin:.3e}, {lvmax:.3e}] | max|x|={lvmaxabs:.3e}")
+                    print(f"    • reconst  range: [{rmin:.3e}, {rmax:.3e}] | max|x|={rmaxabs:.3e}")
+                    # Backoff LR and skip this batch
+                    lr_min = float(self.config.get('lr_min', 1e-7))
+                    for g in self.optimizer.param_groups:
+                        old_lr = g['lr']
+                        g['lr'] = max(lr_min, old_lr * 0.5)
+                    new_lr = self.optimizer.param_groups[0]['lr']
+                    print(f"    • Action: skipped batch, reduced LR to {new_lr:.2e}")
+                    continue
                 
                 if is_training:
                     # Backward pass and optimization for training
@@ -1086,6 +1130,8 @@ def main():
                        help='Override scheduler minimum learning rate (default 1e-7)')
     parser.add_argument('--disable-convergence-stop', action='store_true',
                        help='Disable convergence-based early stopping; rely on patience only')
+    parser.add_argument('--disable-genq', action='store_true',
+                       help='Disable Generation Quality loss for this run')
     
     args = parser.parse_args()
     
@@ -1226,6 +1272,12 @@ def main():
     # Early-stopping behavior toggles
     if args.disable_convergence_stop:
         config['disable_convergence_stop'] = True
+    # Disable Generation Quality loss on demand
+    if args.disable_genq:
+        config.setdefault('loss_config', {})['use_generation_quality'] = False
+        config['loss_config']['generation_weight'] = 0.0
+        config['generation_weight'] = 0.0
+        config['generation_schedule'] = False
     
     # Create and run trainer
     trainer = UnifiedVAETrainer(config)

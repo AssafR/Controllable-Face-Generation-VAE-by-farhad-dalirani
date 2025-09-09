@@ -128,3 +128,23 @@ Where:
 4. **Fine-tune parameters** if needed
 
 The improved architecture should significantly reduce blurriness while maintaining good generation quality! 🎉
+
+---
+
+## Numerical Stability Addendum
+
+### Log-Variance Clamping (Reparameterization and KL)
+
+- Purpose: Prevent overflow/underflow when computing `std = exp(0.5 * log_var)` and in the KL term.
+- Implementation:
+  - In `Encoder_pt` sampler: clamp `emb_log_var` to [-15, 15] before reparameterization.
+  - In `VAE_pt.kl_loss`: apply the same clamp to `emb_log_var` before KL calculation.
+- Rationale: Large positive `log_var` blows up `exp(·)` to Inf; large negative values collapse std and destabilize gradients. Clamping preserves training dynamics while avoiding NaNs.
+
+### Input Validation and Sanitization
+
+- Purpose: Guard against NaN/Inf introduced by data pipelines or transforms.
+- Implementation (training loop in `train_unified.py`):
+  - Replace non-finite values via `torch.nan_to_num` (NaN→0, +Inf→1, -Inf→0).
+  - Clamp image tensors to [0.0, 1.0].
+- Rationale: Ensures the model never receives non-finite inputs that could propagate to NaNs in μ, logσ², z, or reconstructions.
