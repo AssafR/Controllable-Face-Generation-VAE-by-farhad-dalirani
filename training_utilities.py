@@ -36,6 +36,15 @@ class ConfigurationManager:
         print(f"  • Epochs: {self.config['max_epoch']}")
         print(f"  • Batch size: {self.config['batch_size']}")
         print(f"  • Learning rate: {self.config['lr']}")
+        # Early stopping and convergence control
+        patience = self.config.get('early_stopping_patience', 12)
+        conv_disabled = bool(self.config.get('disable_convergence_stop', False))
+        conv_status = 'DISABLED' if conv_disabled else 'ENABLED (phase-aware)'
+        stuck_disabled = bool(self.config.get('disable_stuck_stop', True))
+        stuck_status = 'DISABLED' if stuck_disabled else 'ENABLED'
+        print(f"  • Early stopping patience: {patience} epochs")
+        print(f"  • Convergence stop: {conv_status}")
+        print(f"  • Stuck-training stop: {stuck_status}")
         
         # Loss configuration
         self._print_loss_configuration()

@@ -68,6 +68,8 @@ class UnifiedVAETrainer:
         self.patience_counter = 0
         # Best validation loss tracking (replaced outdated eval_weights mechanism)
         self.best_ref_val = float('inf')
+        # Track epoch index of last best for phase-aware convergence checks
+        self.last_best_epoch = -1
         # Track acceleration state to reset patience on activation/deactivation
         self.prev_accel_active = False
         
@@ -553,10 +555,27 @@ class UnifiedVAETrainer:
                 trend = constant_analysis.analysis_data.get('trend', 'unknown')
                 stability = constant_analysis.analysis_data.get('stability', 0.5)
                 
-                # Stop if reference loss is stable and high (converged)
-                if trend == 'stable' and stability > 0.9:
-                    print(f"  ⏹️  Early stopping: Reference loss converged (stability: {stability:.2f})")
-                    return True
+                # Optional: disable convergence-based stopping entirely via config
+                if not bool(self.config.get('disable_convergence_stop', False)):
+                    # If cycle strategy is enabled, require phase-aware confirmation across a full cycle
+                    strategy = getattr(self.loss_manager, 'strategy_controller', None)
+                    phase_aware_ok = True
+                    if strategy is not None:
+                        try:
+                            curr_info = strategy.get_phase_for_epoch(epoch)
+                            if curr_info.get('enabled', False):
+                                cycle_period = int(curr_info.get('cycle_period', 0))
+                                # Require at least one full cycle since last best, and same phase as when last best occurred
+                                if cycle_period > 0 and self.last_best_epoch >= 0:
+                                    last_info = strategy.get_phase_for_epoch(self.last_best_epoch)
+                                    same_phase = (last_info.get('phase') == curr_info.get('phase'))
+                                    phase_aware_ok = ((epoch - self.last_best_epoch) >= cycle_period) and same_phase
+                        except Exception:
+                            phase_aware_ok = True
+                    # Stop if reference loss is stable and high (converged) and phase-aware conditions pass
+                    if trend == 'stable' and stability > 0.9 and phase_aware_ok:
+                        print(f"  ⏹️  Early stopping: Reference loss converged (stability: {stability:.2f})")
+                        return True
             
             # Check standard analysis for stuck training
             if AnalysisMethod.STANDARD in analysis_results:
@@ -564,10 +583,12 @@ class UnifiedVAETrainer:
                 is_stuck = standard_analysis.analysis_data.get('is_stuck', False)
                 stuck_epochs = standard_analysis.analysis_data.get('stuck_epochs', 0)
                 
-                # Stop if stuck for too long
-                if is_stuck and stuck_epochs >= early_stopping_patience:
-                    print(f"  ⏹️  Early stopping: Training stuck for {stuck_epochs} epochs")
-                    return True
+                # Optionally disable stuck-based early stop (disabled by default)
+                if not bool(self.config.get('disable_stuck_stop', True)):
+                    # Stop if stuck for too long
+                    if is_stuck and stuck_epochs >= early_stopping_patience:
+                        print(f"  ⏹️  Early stopping: Training stuck for {stuck_epochs} epochs")
+                        return True
             
             # Check overall health score
             analysis_summary = self.loss_analysis_system.get_analysis_summary(analysis_results)
@@ -790,6 +811,9 @@ class UnifiedVAETrainer:
         is_best = self._save_best_model(epoch, val_metrics, analysis_results)
         self.utilities.save_checkpoint(self.model, self.optimizer, self.scheduler, epoch, train_metrics, val_metrics, is_best)
         
+        # Spacer before sample generation to keep output sections clear
+        print("\n🖼️  Samples")
+        print("".ljust(60, '─'))
         # Generate sample images for every epoch (use validation metrics for exact epoch percentages)
         self.generate_samples(epoch, val_loader.dataset, epoch_metrics=val_metrics)
         
@@ -801,7 +825,21 @@ class UnifiedVAETrainer:
         # Early stopping check
         should_stop = self._check_early_stopping(analysis_results, epoch, early_stopping_patience)
         if should_stop:
-            print(f"\n🛑 Early stopping triggered after {epoch+1} epochs")
+            # Clarify which criterion triggered early stopping if we can
+            try:
+                from loss_analysis_system import AnalysisMethod
+                reason = ""
+                if analysis_results and AnalysisMethod.STANDARD in analysis_results:
+                    std = analysis_results[AnalysisMethod.STANDARD]
+                    is_stuck = std.analysis_data.get('is_stuck', False)
+                    stuck_epochs = std.analysis_data.get('stuck_epochs', 0)
+                    if is_stuck and stuck_epochs >= early_stopping_patience:
+                        reason = f" (reason: stuck {stuck_epochs}/{early_stopping_patience})"
+                if not reason and self.patience_counter >= early_stopping_patience:
+                    reason = f" (reason: no-improvement {self.patience_counter}/{early_stopping_patience})"
+                print(f"\n🛑 Early stopping triggered after {epoch+1} epochs{reason}")
+            except Exception:
+                print(f"\n🛑 Early stopping triggered after {epoch+1} epochs")
             return True
         
         # Time estimation
@@ -868,7 +906,10 @@ class UnifiedVAETrainer:
         accel_info = self.loss_manager.get_acceleration_info()
         accel_on = 'on' if accel_info.get('active', False) else 'off'
         accel_factor = accel_info.get('factor', 1.0)
-        print(f"  🔧 Control: Patience {self.patience_counter}/{self.early_stopping_patience} | Accel: {accel_on} ({accel_factor:.1f}x)")
+        # Also show stuck counter from loss analysis for clarity
+        acc_info = self.loss_manager.get_acceleration_info()
+        stuck_epochs = acc_info.get('stuck_epochs', 0)
+        print(f"  🔧 Control: No-improvement {self.patience_counter}/{self.early_stopping_patience} | Stuck {stuck_epochs}/{self.early_stopping_patience} | Accel: {accel_on} ({accel_factor:.1f}x)")
                 
     def _handle_acceleration_state_changes(self, early_stopping_patience):
         """Handle acceleration state changes and reset patience if needed."""
@@ -961,6 +1002,7 @@ class UnifiedVAETrainer:
         if is_best:
             self.best_ref_val = val_loss
             self.patience_counter = 0
+            self.last_best_epoch = epoch
             print(f"  ✅ New best model! (validation loss = {val_loss:.6f})")
         else:
             self.patience_counter += 1
@@ -1040,6 +1082,10 @@ def main():
                        help='Use a named cycle strategy preset')
     parser.add_argument('--batch-size', type=int,
                        help='Override batch size for this run')
+    parser.add_argument('--lr-min', type=float,
+                       help='Override scheduler minimum learning rate (default 1e-7)')
+    parser.add_argument('--disable-convergence-stop', action='store_true',
+                       help='Disable convergence-based early stopping; rely on patience only')
     
     args = parser.parse_args()
     
@@ -1171,6 +1217,15 @@ def main():
                 config['batch_size'] = bs
         except Exception:
             pass
+    # Scheduler minimum LR override
+    if args.lr_min is not None:
+        try:
+            config['lr_min'] = float(args.lr_min)
+        except Exception:
+            pass
+    # Early-stopping behavior toggles
+    if args.disable_convergence_stop:
+        config['disable_convergence_stop'] = True
     
     # Create and run trainer
     trainer = UnifiedVAETrainer(config)

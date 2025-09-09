@@ -470,6 +470,17 @@ class TrainingReporter:
         # Quick health check and strategy recommendations
         lines.append(f"\n🏥 QUICK HEALTH CHECK:")
         lines.append(f"{'─'*40}")
+        # Show early-stopping controls summary inline for clarity
+        try:
+            cfg = getattr(self.loss_manager, 'config', {})
+            patience = int(cfg.get('early_stopping_patience', 12))
+            conv_disabled = bool(cfg.get('disable_convergence_stop', False))
+            conv_status = 'off' if conv_disabled else 'on (phase-aware)'
+            stuck_disabled = bool(cfg.get('disable_stuck_stop', True))
+            stuck_status = 'off' if stuck_disabled else 'on'
+            lines.append(f"  🔧 Control: Patience {patience} | Convergence stop: {conv_status} | Stuck stop: {stuck_status}")
+        except Exception:
+            pass
         
         for loss_type, status in health_status.items():
             status_icon = self.get_status_icon(status['status'])
