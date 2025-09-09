@@ -97,6 +97,19 @@ class ConfigLoader:
         else:
             print(f"⚠️  Dataset preset '{dataset_preset}' not found, using base config")
         
+        # Harmonize feature flags with scheduled settings to ensure losses are computed
+        try:
+            # If perceptual scheduling is enabled at top-level, force-enable perceptual loss flag
+            if config.get('perceptual_schedule', False) or float(config.get('perceptual_end', 0) or 0) > 0:
+                config.setdefault('loss_config', {})
+                config['loss_config']['use_perceptual_loss'] = True
+            # If generation quality scheduling is present, ensure its flag is enabled too
+            if config.get('generation_schedule', False) or float(config.get('generation_end', 0) or 0) > 0:
+                config.setdefault('loss_config', {})
+                config['loss_config']['use_generation_quality'] = True
+        except Exception:
+            pass
+        
         # Apply loss analysis preset (support 'none')
         if loss_analysis_preset == 'none':
             # Explicitly disable loss analysis

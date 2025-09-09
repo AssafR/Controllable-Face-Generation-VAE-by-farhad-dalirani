@@ -118,7 +118,7 @@ def get_split_data(config, shuffle=True, validation_split=0.2):
     
     return train_dataset, val_dataset
 
-def display_image_grid(images, titles=None, max_cols=4, figsize=(12, 8), save_path=None):
+def display_image_grid(images, titles=None, max_cols=4, figsize=(12, 8), save_path=None, suptitle: str = None):
     """
     Display images in a grid with optional slider for large collections.
     
@@ -178,7 +178,9 @@ def display_image_grid(images, titles=None, max_cols=4, figsize=(12, 8), save_pa
             else:
                 axes[row, col].axis('off')
         
-        plt.tight_layout()
+        if suptitle:
+            fig.suptitle(suptitle, fontsize=12)
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95] if suptitle else None)
         
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches='tight')
@@ -190,7 +192,7 @@ def display_image_grid(images, titles=None, max_cols=4, figsize=(12, 8), save_pa
         # Use slider for large collections
         display_image_grid_with_slider(images, titles, max_cols, figsize, save_path)
 
-def display_image_grid_with_slider(images, titles=None, max_cols=4, figsize=(12, 8), save_path=None):
+def display_image_grid_with_slider(images, titles=None, max_cols=4, figsize=(12, 8), save_path=None, suptitle: str = None):
     """
     Display images in a grid with a slider for navigation.
     
@@ -208,6 +210,8 @@ def display_image_grid_with_slider(images, titles=None, max_cols=4, figsize=(12,
     
     # Create figure with slider
     fig = plt.figure(figsize=figsize)
+    if suptitle:
+        plt.suptitle(suptitle, fontsize=12)
     
     # Create main axes for images
     ax_images = plt.subplot2grid((10, 1), (0, 0), rowspan=8)
@@ -280,7 +284,7 @@ def display_image_grid_with_slider(images, titles=None, max_cols=4, figsize=(12,
         print(f"Images saved to: {save_path}")
     plt.close()  # Close the figure to prevent crashes
 
-def display_comparison_grid(original_images, generated_images, titles=None, max_cols=4, figsize=(15, 10), save_path=None):
+def display_comparison_grid(original_images, generated_images, titles=None, max_cols=4, figsize=(15, 10), save_path=None, suptitle: str = None):
     """
     Display original and generated images side by side for comparison.
     
@@ -360,7 +364,9 @@ def display_comparison_grid(original_images, generated_images, titles=None, max_
             axes[row, orig_col].axis('off')
             axes[row, gen_col].axis('off')
     
-    plt.tight_layout()
+    if suptitle:
+        fig.suptitle(suptitle, fontsize=12)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95] if suptitle else None)
     
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches='tight')

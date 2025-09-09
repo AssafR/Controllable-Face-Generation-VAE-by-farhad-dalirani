@@ -5,6 +5,7 @@ Centralized, extensible training progress reporting and analysis.
 """
 
 from typing import Dict, Any, List, Optional
+import torch
 from loss_weight_manager import LossWeightManager
 
 
@@ -189,6 +190,34 @@ class TrainingReporter:
         else:
             return 'fixed'
     
+    def _get_vgg_loss_type(self) -> str:
+        """Get the VGG loss type being used (single source of truth)."""
+        try:
+            # Get loss config from the loss manager
+            loss_config = self.loss_manager.loss_calculator.loss_config
+            
+            # Check if perceptual loss is enabled
+            if not loss_config.get('use_perceptual_loss', False):
+                return None
+            
+            # Determine VGG type based on configuration flags (same logic as startup)
+            if loss_config.get('ultra_full_vgg_perceptual', False):
+                return "VGG Ultra-Full (16 layers)"
+            elif loss_config.get('full_vgg_perceptual', False):
+                return "VGG Full (12 layers)"
+            else:
+                # Check GPU memory to determine if aggressive optimization is used
+                if torch.cuda.is_available():
+                    gpu_memory_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
+                    if gpu_memory_gb < 12:
+                        return "VGG Aggressive (3 layers)"
+                    else:
+                        return "VGG Standard (5 layers)"
+                else:
+                    return "VGG Standard (5 layers)"
+        except Exception:
+            return None
+    
     def format_epoch_summary(self, epoch: int, max_epochs: int, train_metrics: Dict[str, float], 
                             val_metrics: Dict[str, float], current_lr: float, 
                             gpu_memory_allocated: float, gpu_memory_total: float, 
@@ -230,7 +259,15 @@ class TrainingReporter:
         perceptual_info = self.loss_manager.get_weight_info('perceptual_weight')
         
         lines.append(f"🔄 BETA: {beta_info['value']:.3f} ({self.get_type_label(beta_info)})")
-        lines.append(f"🎨 PERCEPTUAL: {perceptual_info['value']:.3f} ({self.get_type_label(perceptual_info)})")
+        
+        # Perceptual with VGG type
+        vgg_type = self._get_vgg_loss_type()
+        if vgg_type:
+            # Extract the type from "VGG Full (12 layers)" -> "full"
+            vgg_type_short = vgg_type.split('(')[0].split()[-1].lower()
+            lines.append(f"🎨 PERCEPTUAL: {perceptual_info['value']:.3f} ({self.get_type_label(perceptual_info)}) [{vgg_type_short}]")
+        else:
+            lines.append(f"🎨 PERCEPTUAL: {perceptual_info['value']:.3f} ({self.get_type_label(perceptual_info)})")
         
         # GPU memory
         lines.append(f"💾 GPU MEMORY: {gpu_memory_allocated:.1f}GB / {gpu_memory_total:.1f}GB ({gpu_utilization:.0f}%)")
@@ -283,6 +320,12 @@ class TrainingReporter:
             'generation_quality': ('🎯', 'Generation', 'generation_weight')
         }
         
+        # Get VGG type for perceptual loss display
+        vgg_type = self._get_vgg_loss_type()
+        vgg_type_short = ""
+        if vgg_type:
+            vgg_type_short = f" ({vgg_type.split('(')[0].split()[-1].lower()})"
+        
         # Display each loss component with proper weighting
         for loss_key, (icon, display_name, weight_key) in loss_components.items():
             if loss_key in train_metrics:
@@ -291,12 +334,17 @@ class TrainingReporter:
                 weighted_value = raw_value * weight
                 contribution = (weighted_value / total_loss) * 100 if total_loss > 0 else 0
                 
+                # Add VGG type to perceptual loss display name
+                display_name_with_type = display_name
+                if loss_key == 'perceptual' and vgg_type_short:
+                    display_name_with_type = f"{display_name}{vgg_type_short}"
+                
                 # Get health status for this loss type
                 if loss_key in health_status:
                     status_icon = self.get_status_icon(health_status[loss_key]['status'])
-                    lines.append(f"  {status_icon} {icon} {display_name:<12} {raw_value:.4f} (raw) × {weight:.3f} = {weighted_value:.4f} ({contribution:.0f}% of total)")
+                    lines.append(f"  {status_icon} {icon} {display_name_with_type:<12} {raw_value:.4f} (raw) × {weight:.3f} = {weighted_value:.4f} ({contribution:.0f}% of total)")
                 else:
-                    lines.append(f"  ✅ {icon} {display_name:<12} {raw_value:.4f} (raw) × {weight:.3f} = {weighted_value:.4f} ({contribution:.0f}% of total)")
+                    lines.append(f"  ✅ {icon} {display_name_with_type:<12} {raw_value:.4f} (raw) × {weight:.3f} = {weighted_value:.4f} ({contribution:.0f}% of total)")
         
         # Show reconstruction total
         if 'recon_loss' in train_metrics:

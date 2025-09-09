@@ -29,13 +29,15 @@ class VGGPerceptualLoss(nn.Module):
     torchvision is not available.
     """
     
-    def __init__(self, device: str = 'cuda', aggressive_optimization: bool = False):
+    def __init__(self, device: str = 'cuda', aggressive_optimization: bool = False, full_vgg: bool = False, ultra_full: bool = False):
         """
         Initialize VGG perceptual loss.
         
         Args:
             device: Device to run the model on
             aggressive_optimization: If True, use only 3 VGG layers for maximum memory savings
+            full_vgg: If True, use 12 layers for high perceptual quality
+            ultra_full: If True, use 16 layers for maximum perceptual quality (very memory intensive)
         """
         super().__init__()
         
@@ -44,6 +46,8 @@ class VGGPerceptualLoss(nn.Module):
         
         self.device = device
         self.aggressive_optimization = aggressive_optimization
+        self.full_vgg = full_vgg
+        self.ultra_full = ultra_full
         
         # Load pre-trained VGG19 using modern API
         self._load_vgg_model()
@@ -62,22 +66,22 @@ class VGGPerceptualLoss(nn.Module):
         """Load pre-trained VGG19 model with compatibility for different torchvision versions."""
         try:
             # Modern torchvision (0.13+) - preferred method
-            full_vgg = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).features
+            vgg_features = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).features
             print("  ✅ Using modern VGG19 weights API (torchvision 0.13+)")
         except AttributeError:
             # Fallback for torchvision 0.12-0.13
             try:
-                full_vgg = models.vgg19(weights='IMAGENET1K_V1').features
+                vgg_features = models.vgg19(weights='IMAGENET1K_V1').features
                 print("  ✅ Using VGG19 weights API (torchvision 0.12-0.13)")
             except TypeError:
                 # Very old torchvision - use deprecated API with warning suppression
                 import warnings
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    full_vgg = models.vgg19(pretrained=True).features
+                    vgg_features = models.vgg19(pretrained=True).features
                 print("  ⚠️  Using deprecated VGG19 API (torchvision <0.12) - consider upgrading")
         
-        self.full_vgg = full_vgg
+        self.vgg_model = vgg_features
     
     def _build_minimal_vgg(self) -> None:
         """Build minimal VGG with only necessary layers for memory optimization."""
@@ -85,6 +89,16 @@ class VGGPerceptualLoss(nn.Module):
             # Ultra-aggressive optimization: only use 2-3 layers
             self.feature_layers = [1, 6, 11]  # conv1_2, conv2_2, conv3_4 only
             print("  🚀 Using aggressive VGG optimization (3 layers only)")
+        elif self.ultra_full:
+            # Ultra-full VGG optimization: use 16 layers for maximum perceptual quality
+            # This includes all conv layers from conv1_1 through conv5_4
+            self.feature_layers = [0, 1, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19]  # All conv layers
+            print("  🔥 Using ultra-full VGG optimization (16 layers)")
+        elif self.full_vgg:
+            # Full VGG optimization: use 12 layers for high perceptual quality
+            # This includes conv1_1, conv1_2, conv2_1, conv2_2, conv3_1, conv3_2, conv3_3, conv3_4, conv4_1, conv4_2, conv4_3, conv4_4
+            self.feature_layers = [0, 1, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14]  # All conv layers up to conv4_4
+            print("  🎯 Using full VGG optimization (12 layers)")
         else:
             # Standard optimization: use 5 layers
             self.feature_layers = [1, 6, 11, 20, 29]  # conv1_2, conv2_2, conv3_4, conv4_4, conv5_4
@@ -92,9 +106,11 @@ class VGGPerceptualLoss(nn.Module):
         
         # Build minimal VGG with only necessary layers
         self.vgg_layers = nn.ModuleList()
-        for i, layer in enumerate(self.full_vgg):
+        self.layer_indices = []  # Store the original VGG indices for each selected layer
+        for i, layer in enumerate(self.vgg_model):
             if i in self.feature_layers:
                 self.vgg_layers.append(layer)
+                self.layer_indices.append(i)
             elif i > max(self.feature_layers):
                 break
     
@@ -121,15 +137,12 @@ class VGGPerceptualLoss(nn.Module):
             List of feature tensors
         """
         features = []
-        layer_idx = 0
         
-        for i, layer in enumerate(self.full_vgg):
+        # Run through the full VGG model and collect features at specified layers
+        for i, layer in enumerate(self.vgg_model):
             x = layer(x)
             if i in self.feature_layers:
                 features.append(x)
-                layer_idx += 1
-                if layer_idx >= len(self.vgg_layers):
-                    break
         
         return features
     
@@ -152,11 +165,20 @@ class VGGPerceptualLoss(nn.Module):
         pred_features = self.forward(pred)
         target_features = self.forward(target)
         
-        # Compute loss
+        # Compute loss with proper normalization
         loss = 0.0
         for pred_feat, target_feat in zip(pred_features, target_features):
-            loss += F.mse_loss(pred_feat, target_feat)
+            # Compute MSE loss for this layer
+            layer_loss = F.mse_loss(pred_feat, target_feat)
+            
+            # Normalize by the variance of the target features to account for different layer scales
+            # This ensures that each layer contributes proportionally regardless of its magnitude
+            target_var = torch.var(target_feat) + 1e-8  # Add small epsilon to avoid division by zero
+            normalized_layer_loss = layer_loss / target_var
+            
+            loss += normalized_layer_loss
         
+        # Normalize by number of layers to maintain consistent scale across different VGG configurations
         return loss / len(pred_features)
     
     def _normalize_input(self, x: torch.Tensor) -> torch.Tensor:
@@ -198,7 +220,10 @@ class VGGPerceptualLoss(nn.Module):
             "memory_allocated_gb": memory_allocated,
             "memory_reserved_gb": memory_reserved,
             "feature_layers": len(self.feature_layers),
-            "aggressive_optimization": self.aggressive_optimization
+            "aggressive_optimization": self.aggressive_optimization,
+            "full_vgg": self.full_vgg,
+            "ultra_full": self.ultra_full,
+            "normalization": "variance_normalized"
         }
 
 
@@ -262,20 +287,24 @@ class HighPassPerceptualLoss(nn.Module):
 
 def create_perceptual_loss(device: str = 'cuda', 
                           aggressive_optimization: bool = False,
+                          full_vgg: bool = False,
+                          ultra_full: bool = False,
                           fallback_to_highpass: bool = True) -> nn.Module:
     """
     Factory function to create a perceptual loss module.
     
     Args:
         device: Device to run the model on
-        aggressive_optimization: If True, use aggressive VGG optimization
+        aggressive_optimization: If True, use aggressive VGG optimization (3 layers)
+        full_vgg: If True, use full VGG optimization (12 layers)
+        ultra_full: If True, use ultra-full VGG optimization (16 layers)
         fallback_to_highpass: If True, fallback to high-pass filter when VGG unavailable
         
     Returns:
         Perceptual loss module
     """
     if TORCHVISION_AVAILABLE:
-        return VGGPerceptualLoss(device, aggressive_optimization)
+        return VGGPerceptualLoss(device, aggressive_optimization, full_vgg, ultra_full)
     elif fallback_to_highpass:
         print("  ⚠️  VGG not available, using high-pass filter fallback")
         return HighPassPerceptualLoss(device)
@@ -294,5 +323,57 @@ def get_perceptual_loss_info() -> dict:
         "torchvision_available": TORCHVISION_AVAILABLE,
         "vgg_available": TORCHVISION_AVAILABLE,
         "highpass_available": True,
-        "recommended": "VGG" if TORCHVISION_AVAILABLE else "HighPass"
+        "recommended": "VGG" if TORCHVISION_AVAILABLE else "HighPass",
+        "options": {
+            "aggressive": "3 layers - for <12GB GPUs",
+            "standard": "5 layers - for 12-16GB GPUs", 
+            "full": "12 layers - for ≥16GB GPUs",
+            "ultra_full": "16 layers - for ≥20GB GPUs"
+        },
+        "normalization": "variance_normalized_for_consistent_scaling"
     }
+
+
+def test_vgg_normalization(device: str = 'cuda') -> dict:
+    """
+    Test that different VGG configurations produce similar loss magnitudes.
+    
+    Args:
+        device: Device to run the test on
+        
+    Returns:
+        Dictionary with test results
+    """
+    if not TORCHVISION_AVAILABLE:
+        return {"error": "torchvision not available"}
+    
+    # Create test tensors
+    test_pred = torch.randn(1, 3, 64, 64).to(device)
+    test_target = torch.randn(1, 3, 64, 64).to(device)
+    
+    results = {}
+    
+    # Test different configurations
+    configs = [
+        ("aggressive", True, False, False),
+        ("standard", False, False, False), 
+        ("full", False, True, False),
+        ("ultra_full", False, False, True)
+    ]
+    
+    for name, aggressive, full, ultra in configs:
+        try:
+            loss_fn = VGGPerceptualLoss(device, aggressive, full, ultra)
+            loss_value = loss_fn.compute_loss(test_pred, test_target)
+            results[name] = {
+                "loss": float(loss_value),
+                "layers": len(loss_fn.feature_layers),
+                "success": True
+            }
+        except Exception as e:
+            results[name] = {
+                "error": str(e),
+                "success": False
+            }
+    
+    return results

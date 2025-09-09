@@ -53,8 +53,10 @@ class ConfigurationManager:
     
     def _print_loss_analysis_configuration(self) -> None:
         """Print loss analysis configuration details."""
-        loss_analysis_config = self.config.get('loss_analysis', {})
-        if not loss_analysis_config:
+        enabled = bool(self.config.get('enable_loss_analysis', False))
+        loss_analysis_config = self.config.get('loss_analysis', {}) if enabled else {}
+        if not enabled:
+            print(f"\n📊 LOSS ANALYSIS: DISABLED")
             return
         
         print(f"\n📊 LOSS ANALYSIS CONFIGURATION:")
@@ -89,8 +91,9 @@ class ConfigurationManager:
             print(f"  • Trend window: {loss_analysis_config['trend_window']} epochs")
         
         # Reporting interval
-        interval = self.config.get('loss_analysis_interval', 5)
-        print(f"  • Report interval: Every {interval} epochs")
+        if enabled:
+            interval = self.config.get('loss_analysis_interval', 5)
+            print(f"  • Report interval: Every {interval} epochs")
         
         # Logging
         if loss_analysis_config.get('enable_logging', False):
@@ -106,11 +109,37 @@ class ConfigurationManager:
         
         # Loss weights
         print(f"  • Loss weights: MSE={loss_config.get('mse_weight', 0)}, L1={loss_config.get('l1_weight', 0)}")
-        print(f"  • Perceptual: {loss_config.get('perceptual_weight', 0):.3f}, GenQual: {loss_config.get('generation_weight', 0):.3f}")
+        
+        # Perceptual and GenQual weights with VGG type
+        perceptual_weight = loss_config.get('perceptual_weight', 0)
+        genqual_weight = loss_config.get('generation_weight', 0)
+        
+        # Get VGG type for perceptual loss display
+        vgg_type_short = ""
+        if loss_config.get('use_perceptual_loss', False):
+            vgg_type = self._get_vgg_loss_type_from_config()
+            if vgg_type:
+                vgg_type_short = f" ({vgg_type.split('(')[0].split()[-1].lower()})"
+        
+        print(f"  • Perceptual{vgg_type_short}: {perceptual_weight:.3f}, GenQual: {genqual_weight:.3f}")
         
         # Loss components
         print(f"  • Loss components: MSE={loss_config.get('use_mse', False)}, L1={loss_config.get('use_l1', False)}")
-        print(f"  • Perceptual: {loss_config.get('use_perceptual_loss', False)}, GenQual: {loss_config.get('use_generation_quality', False)}")
+        
+        # Perceptual loss with type
+        perceptual_enabled = loss_config.get('use_perceptual_loss', False)
+        if perceptual_enabled:
+            vgg_type = self._get_vgg_loss_type_from_config()
+            if vgg_type:
+                # Extract the type from "VGG Full (12 layers)" -> "full"
+                vgg_type_short = vgg_type.split('(')[0].split()[-1].lower()
+                print(f"  • Perceptual: {perceptual_enabled} ({vgg_type_short})")
+            else:
+                print(f"  • Perceptual: {perceptual_enabled}")
+        else:
+            print(f"  • Perceptual: {perceptual_enabled}")
+        
+        print(f"  • GenQual: {loss_config.get('use_generation_quality', False)}")
         
         # Generation quality breakdown (if enabled)
         if loss_config.get('use_generation_quality', False):
@@ -155,6 +184,30 @@ class ConfigurationManager:
             print(f"  • GPU: {gpu_name} ({gpu_memory:.1f}GB)")
         else:
             print(f"  • GPU: Not available")
+    
+    def _get_vgg_loss_type_from_config(self) -> str:
+        """Get VGG loss type from configuration flags (single source of truth)."""
+        loss_config = self.config.get('loss_config', {})
+        
+        # Check if perceptual loss is enabled
+        if not loss_config.get('use_perceptual_loss', False):
+            return None
+        
+        # Determine VGG type based on configuration flags
+        if loss_config.get('ultra_full_vgg_perceptual', False):
+            return "VGG Ultra-Full (16 layers)"
+        elif loss_config.get('full_vgg_perceptual', False):
+            return "VGG Full (12 layers)"
+        else:
+            # Check GPU memory to determine if aggressive optimization is used
+            if torch.cuda.is_available():
+                gpu_memory_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
+                if gpu_memory_gb < 12:
+                    return "VGG Aggressive (3 layers)"
+                else:
+                    return "VGG Standard (5 layers)"
+            else:
+                return "VGG Standard (5 layers)"
 
 
 class CheckpointManager:

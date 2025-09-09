@@ -493,6 +493,13 @@ class UnifiedVAETrainer:
         """
         from loss_analysis_system import AnalysisMethod
         
+        # Respect KL delay and MSE priority era: don't stop early in these phases
+        kl_delay_epochs = int(self.config.get('kl_delay_epochs', 0))
+        mse_priority_phase = bool(getattr(self.loss_manager, 'mse_priority_phase', False))
+        mse_priority_epochs = int(getattr(self.loss_manager, 'mse_priority_epochs', 0))
+        in_protected_phase = (epoch < kl_delay_epochs) or (mse_priority_phase and epoch < mse_priority_epochs)
+        if in_protected_phase:
+            return False
         # Use traditional patience counter as fallback
         if self.patience_counter >= early_stopping_patience:
             return True
@@ -532,7 +539,37 @@ class UnifiedVAETrainer:
         
         return False
     
-    def generate_samples(self, epoch, val_data, suffix=""):
+    def _build_suptitle(self, epoch, epoch_metrics=None):
+        """Create a compact title with weights and (optional) epoch-level percentages."""
+        weights = self.loss_manager.get_all_weights()
+        weights_line = (
+            f"Epoch {epoch+1}/{self.config['max_epoch']}  |  "
+            f"Weights: MSE={weights.get('mse_weight',0):.3f}, L1={weights.get('l1_weight',0):.3f}, "
+            f"Perc={weights.get('perceptual_weight',0):.3f}, Gen={weights.get('generation_weight',0):.3f}, "
+            f"KL(beta)={weights.get('beta',0):.3f}"
+        )
+        if not epoch_metrics:
+            return weights_line
+        try:
+            total = max(1e-12, float(epoch_metrics.get('loss', 0)))
+            # Weighted component contributions
+            w = self.loss_manager
+            contrib = {
+                'MSE': epoch_metrics.get('mse', 0) * w.get_weight('mse_weight'),
+                'L1': epoch_metrics.get('l1', 0) * w.get_weight('l1_weight'),
+                'Perc': epoch_metrics.get('perceptual', 0) * w.get_weight('perceptual_weight'),
+                'Gen': epoch_metrics.get('generation_quality', 0) * w.get_weight('generation_weight'),
+                'KL': epoch_metrics.get('kl', 0) * w.get_weight('beta'),
+            }
+            percent_line = (
+                f" | Epoch contrib: MSE={contrib['MSE']/total*100:.0f}%, L1={contrib['L1']/total*100:.0f}%, "
+                f"Perc={contrib['Perc']/total*100:.0f}%, Gen={contrib['Gen']/total*100:.0f}%, KL={contrib['KL']/total*100:.0f}%"
+            )
+            return weights_line + percent_line
+        except Exception:
+            return weights_line
+
+    def generate_samples(self, epoch, val_data, suffix="", epoch_metrics=None):
         """Generate sample images."""
         if suffix:
             print(f"  🖼️  Generating sample images ({suffix})...")
@@ -559,11 +596,15 @@ class UnifiedVAETrainer:
             # Save sample images
             sample_path = os.path.join(sample_dir, f"{config_name}_generated_epoch_{epoch+1:03d}{suffix}.png")
             titles = [f"Epoch {epoch+1} - Sample {i+1}" for i in range(8)]
-            display_image_grid(generated_np, 
-                              titles=titles,
-                              max_cols=4, 
-                              figsize=(16, 8),
-                              save_path=sample_path)
+            suptitle = self._build_suptitle(epoch, epoch_metrics)
+            display_image_grid(
+                generated_np,
+                titles=titles,
+                max_cols=4,
+                figsize=(16, 8),
+                save_path=sample_path,
+                suptitle=suptitle,
+            )
             print(f"  ✅ Sample images saved: {sample_path}")
             
             # Also generate reconstruction samples
@@ -576,11 +617,16 @@ class UnifiedVAETrainer:
             recon_np = reconstructed.permute(0, 2, 3, 1).cpu().numpy()
             
             recon_path = os.path.join(sample_dir, f"{config_name}_reconstruction_epoch_{epoch+1:03d}{suffix}.png")
-            display_comparison_grid(val_np, recon_np,
-                                   titles=[f"Epoch {epoch+1} - Pair {i+1}" for i in range(4)],
-                                   max_cols=2, 
-                                   figsize=(12, 8),
-                                   save_path=recon_path)
+            comp_title = self._build_suptitle(epoch, epoch_metrics)
+            display_comparison_grid(
+                val_np,
+                recon_np,
+                titles=[f"Epoch {epoch+1} - Pair {i+1}" for i in range(4)],
+                max_cols=2,
+                figsize=(12, 8),
+                save_path=recon_path,
+                suptitle=comp_title,
+            )
             print(f"  ✅ Reconstruction samples saved: {recon_path}")
     
     def train(self, resume=True):
@@ -596,8 +642,7 @@ class UnifiedVAETrainer:
     
     def _setup_training_environment(self, resume=True):
         """Setup the training environment including model, data, and checkpoints."""
-        # Print initial configuration
-        self.utilities.print_configuration("Fresh")
+        # Defer printing configuration until we know if we're resuming
         
         # Setup logging
         self.setup_logging()
@@ -614,11 +659,22 @@ class UnifiedVAETrainer:
         # Handle checkpoint loading/clearing
         config_name = self.config.get('config_name', 'unified')
         checkpoint_path = f"checkpoints/{config_name}_training_checkpoint.pth"
+        resumed = False
         if not resume:
             # Clear old checkpoints and model files for fresh start
             self.utilities.clear_old_files()
-        elif resume and self.utilities.load_checkpoint(checkpoint_path, self.model, self.optimizer, self.scheduler)[0]:
-            pass  # Configuration already printed
+        elif resume:
+            success, last_epoch, _ = self.utilities.load_checkpoint(checkpoint_path, self.model, self.optimizer, self.scheduler)
+            if success:
+                # Resume training from the next epoch so schedules continue correctly
+                self.start_epoch = min(last_epoch + 1, self.config['max_epoch'] - 1)
+                # Ensure best reference value aligns with resumed checkpoint
+                self.best_ref_val = self.utilities.checkpoint_manager.best_val_loss
+                print(f"  🔁 Resuming from epoch {self.start_epoch} (best val: {self.best_ref_val:.6f})")
+                resumed = True
+        
+        # Now print initial configuration with accurate mode
+        self.utilities.print_configuration("Resume" if resumed else "Fresh")
         
         return train_loader, val_loader
     
@@ -626,13 +682,17 @@ class UnifiedVAETrainer:
         """Run the main training loop."""
         print(f"\n🎯 Starting training...")
         start_time = time.time()
-        early_stopping_patience = 12
+        self.early_stopping_patience = int(self.config.get('early_stopping_patience', 12))
+        
+        # Track the last completed epoch for final sample generation
+        last_epoch = self.start_epoch - 1
         
         # Use context manager for proper writer cleanup
         try:
             for epoch in range(self.start_epoch, self.config['max_epoch']):
                 # Process a single epoch
-                should_stop = self._process_epoch_full(epoch, train_loader, val_loader, start_time, early_stopping_patience)
+                should_stop = self._process_epoch_full(epoch, train_loader, val_loader, start_time, self.early_stopping_patience)
+                last_epoch = epoch  # Update last completed epoch
                 if should_stop:
                     break
             
@@ -641,10 +701,10 @@ class UnifiedVAETrainer:
             print(f"📊 Total training time: {(time.time() - start_time)/3600:.2f} hours")
             print(f"🏆 Best validation loss: {self.best_ref_val:.6f}")
             
-            # Generate final samples
+            # Generate final samples using the actual last epoch (not max_epoch)
             print(f"\n🎨 Generating final samples...")
             # Use suffix-based saving inside generate_samples
-            self.generate_samples(self.config['max_epoch']-1, val_loader.dataset, suffix="_final")
+            self.generate_samples(last_epoch, val_loader.dataset, suffix="_final")
         
         finally:
             # Ensure writer is properly closed
@@ -689,8 +749,8 @@ class UnifiedVAETrainer:
         is_best = self._save_best_model(epoch, val_metrics, analysis_results)
         self.utilities.save_checkpoint(self.model, self.optimizer, self.scheduler, epoch, train_metrics, val_metrics, is_best)
         
-        # Generate sample images for every epoch
-        self.generate_samples(epoch, val_loader.dataset)
+        # Generate sample images for every epoch (use validation metrics for exact epoch percentages)
+        self.generate_samples(epoch, val_loader.dataset, epoch_metrics=val_metrics)
         
         # Print detailed loss analysis report at configured interval
         analysis_interval = self.config.get('loss_analysis_interval', 5)
@@ -767,7 +827,7 @@ class UnifiedVAETrainer:
         accel_info = self.loss_manager.get_acceleration_info()
         accel_on = 'on' if accel_info.get('active', False) else 'off'
         accel_factor = accel_info.get('factor', 1.0)
-        print(f"  🔧 Control: Patience {self.patience_counter}/{12} | Accel: {accel_on} ({accel_factor:.1f}x)")
+        print(f"  🔧 Control: Patience {self.patience_counter}/{self.early_stopping_patience} | Accel: {accel_on} ({accel_factor:.1f}x)")
                 
     def _handle_acceleration_state_changes(self, early_stopping_patience):
         """Handle acceleration state changes and reset patience if needed."""
@@ -856,13 +916,14 @@ class UnifiedVAETrainer:
                 is_best = True
                 print(f"  ✅ Analysis-based best model! (trend: {trend}, rate: {improvement_rate:.3f})")
         
-                if is_best:
-                    self.best_ref_val = val_loss
-                    self.patience_counter = 0
-                    print(f"  ✅ New best model! (validation loss = {val_loss:.6f})")
-                else:
-                    self.patience_counter += 1
-                    print(f"  ⏳ No improvement ({self.patience_counter}/12)")
+        # Update best tracking and patience regardless of analysis presence
+        if is_best:
+            self.best_ref_val = val_loss
+            self.patience_counter = 0
+            print(f"  ✅ New best model! (validation loss = {val_loss:.6f})")
+        else:
+            self.patience_counter += 1
+            print(f"  ⏳ No improvement ({self.patience_counter}/{self.early_stopping_patience})")
         
         return is_best
     
@@ -899,8 +960,14 @@ def main():
                        help='Start training from scratch (clear checkpoints)')
     parser.add_argument('--loss-analysis-interval', type=int, default=5,
                        help='Interval for detailed loss analysis reports (default: 5)')
+    parser.add_argument('--early-stopping-patience', type=int,
+                       help='Override early stopping patience (default from config, usually 12)')
     parser.add_argument('--enable-loss-analysis', action='store_true',
                        help='Enable loss analysis system')
+    parser.add_argument('--analysis', choices=['none', 'basic', 'standard', 'detailed', 'research'],
+                       help='Shortcut to set loss analysis preset and enable/disable accordingly')
+    parser.add_argument('--max-epoch', type=int,
+                       help='Override total number of epochs (keeps preset name for checkpoint resume)')
     parser.add_argument('--loss-analysis-methods', nargs='+', 
                        choices=['standard', 'constant_weight', 'pareto'], 
                        default=['standard', 'constant_weight', 'pareto'],
@@ -908,23 +975,68 @@ def main():
     parser.add_argument('--loss-analysis-preset', choices=['none', 'basic', 'standard', 'detailed', 'research'], 
                        default='standard',
                        help='Loss analysis configuration preset (default: standard)')
+    # On-the-fly overrides for balancing during resume
+    parser.add_argument('--perceptual-scale', type=float,
+                       help='Scale factor to multiply perceptual_weight (and schedule end) during this run')
+    parser.add_argument('--perceptual-end', type=float,
+                       help='Override perceptual_end (schedule target)')
+    parser.add_argument('--perceptual-warmup', type=int,
+                       help='Override perceptual_warmup_epochs')
+    parser.add_argument('--full-vgg', action='store_true',
+                       help='Use full VGG perceptual loss (12 layers) for better quality')
+    parser.add_argument('--ultra-full-vgg', action='store_true',
+                       help='Use ultra-full VGG perceptual loss (16 layers) for maximum quality')
     
     args = parser.parse_args()
     
     # Load configuration
     config_loader = ConfigLoader('config/config_unified.json')
+    # If --analysis is provided, use it as the preset
+    effective_analysis_preset = args.analysis if args.analysis else args.loss_analysis_preset
     config = config_loader.get_config(
         loss_preset=args.loss_preset,
         training_preset=args.training_preset,
         model_preset=args.model_preset,
         dataset_preset=args.dataset_preset,
-        loss_analysis_preset=args.loss_analysis_preset
+        loss_analysis_preset=effective_analysis_preset
     )
     
     # Override with command line arguments
     config['loss_analysis_interval'] = args.loss_analysis_interval
-    config['enable_loss_analysis'] = args.enable_loss_analysis
+    if args.early_stopping_patience is not None:
+        config['early_stopping_patience'] = int(args.early_stopping_patience)
+    if args.max_epoch is not None:
+        # Allow extending or reducing total epochs without changing preset-derived config name
+        config['max_epoch'] = int(args.max_epoch)
+    # Respect preset-driven enablement unless user explicitly sets --analysis or --enable-loss-analysis
+    if args.analysis is not None:
+        config['enable_loss_analysis'] = (args.analysis != 'none')
+    else:
+        # Preserve True from preset if present; only turn on if flag provided
+        preset_enabled = bool(config.get('enable_loss_analysis', False))
+        config['enable_loss_analysis'] = preset_enabled or bool(args.enable_loss_analysis)
     config['loss_analysis_methods'] = args.loss_analysis_methods
+    # Perceptual overrides for quick rebalancing
+    if args.perceptual_scale is not None:
+        try:
+            config['perceptual_weight'] = float(config.get('perceptual_weight', 0.0)) * float(args.perceptual_scale)
+            # If scheduled, scale the end target too
+            if config.get('perceptual_schedule', False):
+                if 'perceptual_end' in config:
+                    config['perceptual_end'] = float(config.get('perceptual_end', 0.0)) * float(args.perceptual_scale)
+        except Exception:
+            pass
+    if args.perceptual_end is not None:
+        config['perceptual_end'] = float(args.perceptual_end)
+        config['perceptual_schedule'] = True
+    if args.perceptual_warmup is not None:
+        config['perceptual_warmup_epochs'] = int(args.perceptual_warmup)
+    if args.full_vgg:
+        config['full_vgg_perceptual'] = True
+        config.setdefault('loss_config', {})['full_vgg_perceptual'] = True
+    if args.ultra_full_vgg:
+        config['ultra_full_vgg_perceptual'] = True
+        config.setdefault('loss_config', {})['ultra_full_vgg_perceptual'] = True
     
     # Create and run trainer
     trainer = UnifiedVAETrainer(config)
@@ -933,3 +1045,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

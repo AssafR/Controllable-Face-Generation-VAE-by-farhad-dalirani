@@ -36,11 +36,13 @@ class LossCalculator:
         if self.loss_config.get('use_perceptual_loss', False):
             try:
                 if get_perceptual_loss_info()['torchvision_available']:
-                    # Determine if we need aggressive optimization based on GPU memory
+                    # Determine optimization level based on GPU memory and config
                     gpu_memory_gb = torch.cuda.get_device_properties(device).total_memory / 1024**3 if torch.cuda.is_available() else 0
                     aggressive_optimization = gpu_memory_gb < 12  # Use aggressive optimization for <12GB GPUs
+                    full_vgg = gpu_memory_gb >= 16 and self.loss_config.get('full_vgg_perceptual', False)  # Use full VGG for >=16GB GPUs when enabled
+                    ultra_full = gpu_memory_gb >= 20 and self.loss_config.get('ultra_full_vgg_perceptual', False)  # Use ultra-full VGG for >=20GB GPUs when enabled
                     
-                    self.perceptual_loss_fn = create_perceptual_loss(device, aggressive_optimization=aggressive_optimization)
+                    self.perceptual_loss_fn = create_perceptual_loss(device, aggressive_optimization=aggressive_optimization, full_vgg=full_vgg, ultra_full=ultra_full)
                     print(f"  ✅ Using VGG-based perceptual loss")
                 else:
                     print(f"  ⚠️  VGG not available, using high-pass filter fallback")
