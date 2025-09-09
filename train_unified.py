@@ -1038,6 +1038,8 @@ def main():
                        help='Epochs per cycle dedicated to variational phase (default: period - recon)')
     parser.add_argument('--cycle-preset', choices=['balanced_cycles', 'aggressive_cycles', 'gentle_cycles'],
                        help='Use a named cycle strategy preset')
+    parser.add_argument('--batch-size', type=int,
+                       help='Override batch size for this run')
     
     args = parser.parse_args()
     
@@ -1160,6 +1162,15 @@ def main():
         config['cycle_recon_epochs'] = int(args.cycle_recon_epochs)
     if args.cycle_variational_epochs is not None:
         config['cycle_variational_epochs'] = int(args.cycle_variational_epochs)
+    # Batch size override
+    if args.batch_size is not None:
+        try:
+            bs = int(args.batch_size)
+            if bs > 0:
+                config['original_batch_size'] = config.get('batch_size', bs)
+                config['batch_size'] = bs
+        except Exception:
+            pass
     
     # Create and run trainer
     trainer = UnifiedVAETrainer(config)
