@@ -7,6 +7,7 @@ Centralized, consistent scheduling for all loss weights (beta, perceptual, etc.)
 from typing import Dict, Any, List, Optional
 import math
 from mse_priority_manager import LossPriorityManager
+from training_strategies import StrategyController
 
 
 class LossWeightManager:
@@ -97,16 +98,23 @@ class LossWeightManager:
         self.mse_priority_epochs = config.get('mse_priority_epochs', 10)
         self.mse_priority_multiplier = config.get('mse_priority_multiplier', 2.0)
         
-        # Initialize loss priority manager
+        # Initialize loss priority manager and centralized strategy controller
         self.priority_manager = LossPriorityManager(self)
+        self.strategy_controller = StrategyController(config, self.priority_manager)
+        
+        # Cycle strategy is fully centralized in StrategyController
     
     def set_epoch(self, epoch: int) -> None:
         """Update current epoch for weight calculations."""
         self.current_epoch = epoch
         self.original_epoch = epoch
+        # Inform centralized strategy controller
+        self.strategy_controller.set_epoch(epoch)
         # On cycle boundary, gently raise the KL beta floor
         if self.kl_cycle_enabled and self.current_epoch > 0 and (self.current_epoch % max(self.kl_cycle_period, 1) == 0):
             self.kl_beta_floor = min(1.0, self.kl_beta_floor * self.kl_floor_growth)
+        
+        # Cycle phase handled by StrategyController
     
     def update_kl_contribution(self, kl_contribution: float) -> None:
         """
@@ -271,16 +279,14 @@ class LossWeightManager:
         if loss_type == 'l1_weight' and self.adaptive_mse_l1:
             return self.current_l1_weight
         
-        # Apply priority phase modifications using the centralized manager
-        priority_modifier = self.priority_manager.get_weight_modifier(loss_type, self.current_epoch)
-        if priority_modifier != 1.0:
-            base_weight = self._get_scheduled_weight(loss_type) if not self.stage_based else self._get_stage_based_weight(loss_type)
-            return base_weight * priority_modifier
-        
+        # Base from schedule or stage-based
         if self.stage_based:
-            return self._get_stage_based_weight(loss_type)
+            base_value = self._get_stage_based_weight(loss_type)
         else:
-            return self._get_scheduled_weight(loss_type)
+            base_value = self._get_scheduled_weight(loss_type)
+
+        # Apply all strategy multipliers from the centralized controller
+        return self.strategy_controller.apply_multipliers(loss_type, base_value)
     
     def _get_stage_based_weight(self, loss_type: str) -> float:
         """Get weight value based on current training stage."""

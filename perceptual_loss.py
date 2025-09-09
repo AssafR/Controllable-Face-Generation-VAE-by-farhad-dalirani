@@ -89,16 +89,16 @@ class VGGPerceptualLoss(nn.Module):
             # Ultra-aggressive optimization: only use 2-3 layers
             self.feature_layers = [1, 6, 11]  # conv1_2, conv2_2, conv3_4 only
             print("  🚀 Using aggressive VGG optimization (3 layers only)")
-        elif self.ultra_full:
-            # Ultra-full VGG optimization: use 16 layers for maximum perceptual quality
-            # This includes all conv layers from conv1_1 through conv5_4
-            self.feature_layers = [0, 1, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19]  # All conv layers
-            print("  🔥 Using ultra-full VGG optimization (16 layers)")
         elif self.full_vgg:
             # Full VGG optimization: use 12 layers for high perceptual quality
             # This includes conv1_1, conv1_2, conv2_1, conv2_2, conv3_1, conv3_2, conv3_3, conv3_4, conv4_1, conv4_2, conv4_3, conv4_4
             self.feature_layers = [0, 1, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14]  # All conv layers up to conv4_4
             print("  🎯 Using full VGG optimization (12 layers)")
+        elif self.ultra_full:
+            # Ultra-full VGG optimization: use 16 layers for maximum perceptual quality
+            # This includes all conv layers from conv1_1 through conv5_4W
+            self.feature_layers = [0, 1, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19]  # All conv layers
+            print("  🔥 Using ultra-full VGG optimization (16 layers)")
         else:
             # Standard optimization: use 5 layers
             self.feature_layers = [1, 6, 11, 20, 29]  # conv1_2, conv2_2, conv3_4, conv4_4, conv5_4

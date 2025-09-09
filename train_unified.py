@@ -383,6 +383,47 @@ class UnifiedVAETrainer:
             for i, rec in enumerate(recommendations, 1):
                 print(f"  {i}. {rec}")
         
+        # Show next-epoch strategy immediately after combined recommendations for consistency check,
+        # with detailed up/down/neutral per-loss multipliers
+        try:
+            strategy = getattr(self.loss_manager, 'strategy_controller', None)
+            if strategy is not None:
+                next_info = strategy.get_phase_for_epoch(epoch + 1)
+                if next_info.get('enabled'):
+                    nphase = next_info.get('phase', 'unknown')
+                    npos = next_info.get('phase_pos', 0)
+                    nperiod = next_info.get('cycle_period', 0)
+                    print(f"  🧭 Next-epoch strategy: {nphase} (pos {npos}/{nperiod})")
+                    effect_names = {
+                        'mse_weight': 'MSE',
+                        'l1_weight': 'L1',
+                        'perceptual_weight': 'Perceptual',
+                        'generation_weight': 'Generation',
+                        'beta': 'Beta',
+                    }
+                    ups, downs, neutrals = [], [], []
+                    for key in ['mse_weight', 'l1_weight', 'perceptual_weight', 'generation_weight', 'beta']:
+                        mults = strategy.get_multipliers_for_epoch(key, epoch + 1)
+                        cyc_mult = mults.get('cycle', 1.0)
+                        name = effect_names[key]
+                        if cyc_mult > 1.05:
+                            ups.append(f"{name}×{cyc_mult:.2f}")
+                        elif cyc_mult < 0.95:
+                            downs.append(f"{name}×{cyc_mult:.2f}")
+                        else:
+                            neutrals.append(f"{name}×{cyc_mult:.2f}")
+                    parts = []
+                    if ups:
+                        parts.append(f"↑ {' '.join(ups)}")
+                    if downs:
+                        parts.append(f"↓ {' '.join(downs)}")
+                    if neutrals:
+                        parts.append(f"= {' '.join(neutrals)}")
+                    if parts:
+                        print(f"    Effects: {' | '.join(parts)}")
+        except Exception:
+            pass
+        
         print("=" * 60)
     
     def _apply_loss_analysis_decisions(self, analysis_results, epoch):
@@ -986,6 +1027,17 @@ def main():
                        help='Use full VGG perceptual loss (12 layers) for better quality')
     parser.add_argument('--ultra-full-vgg', action='store_true',
                        help='Use ultra-full VGG perceptual loss (16 layers) for maximum quality')
+    # Alternating-cycle strategy CLI (optional)
+    parser.add_argument('--cycle-training', action='store_true',
+                       help='Enable alternating-cycle strategy (reconstruction vs variational phases)')
+    parser.add_argument('--cycle-period', type=int,
+                       help='Total epochs per cycle (e.g., 6)')
+    parser.add_argument('--cycle-recon-epochs', type=int,
+                       help='Epochs per cycle dedicated to reconstruction phase')
+    parser.add_argument('--cycle-variational-epochs', type=int,
+                       help='Epochs per cycle dedicated to variational phase (default: period - recon)')
+    parser.add_argument('--cycle-preset', choices=['balanced_cycles', 'aggressive_cycles', 'gentle_cycles'],
+                       help='Use a named cycle strategy preset')
     
     args = parser.parse_args()
     
@@ -1037,6 +1089,77 @@ def main():
     if args.ultra_full_vgg:
         config['ultra_full_vgg_perceptual'] = True
         config.setdefault('loss_config', {})['ultra_full_vgg_perceptual'] = True
+    # Apply cycle strategy via preset first (can be further overridden below)
+    if args.cycle_preset is not None:
+        config['cycle_training'] = True
+        config['cycle_preset'] = args.cycle_preset
+        if args.cycle_preset == 'balanced_cycles':
+            config.update({
+                'cycle_period': 6,
+                'cycle_recon_epochs': 3,
+                'cycle_recon_multipliers': {
+                    'mse_weight': 1.5,
+                    'l1_weight': 1.2,
+                    'perceptual_weight': 1.0,
+                    'generation_weight': 0.7,
+                    'beta': 0.7,
+                },
+                'cycle_variational_multipliers': {
+                    'mse_weight': 0.85,
+                    'l1_weight': 0.85,
+                    'perceptual_weight': 0.9,
+                    'generation_weight': 1.5,
+                    'beta': 1.5,
+                }
+            })
+        elif args.cycle_preset == 'aggressive_cycles':
+            config.update({
+                'cycle_period': 4,
+                'cycle_recon_epochs': 2,
+                'cycle_recon_multipliers': {
+                    'mse_weight': 1.7,
+                    'l1_weight': 1.3,
+                    'perceptual_weight': 1.1,
+                    'generation_weight': 0.5,
+                    'beta': 0.5,
+                },
+                'cycle_variational_multipliers': {
+                    'mse_weight': 0.75,
+                    'l1_weight': 0.75,
+                    'perceptual_weight': 0.8,
+                    'generation_weight': 1.7,
+                    'beta': 1.7,
+                }
+            })
+        elif args.cycle_preset == 'gentle_cycles':
+            config.update({
+                'cycle_period': 8,
+                'cycle_recon_epochs': 4,
+                'cycle_recon_multipliers': {
+                    'mse_weight': 1.3,
+                    'l1_weight': 1.1,
+                    'perceptual_weight': 1.0,
+                    'generation_weight': 0.9,
+                    'beta': 0.9,
+                },
+                'cycle_variational_multipliers': {
+                    'mse_weight': 0.9,
+                    'l1_weight': 0.9,
+                    'perceptual_weight': 0.95,
+                    'generation_weight': 1.3,
+                    'beta': 1.3,
+                }
+            })
+
+    # Apply cycle strategy overrides
+    if args.cycle_training:
+        config['cycle_training'] = True
+    if args.cycle_period is not None:
+        config['cycle_period'] = int(args.cycle_period)
+    if args.cycle_recon_epochs is not None:
+        config['cycle_recon_epochs'] = int(args.cycle_recon_epochs)
+    if args.cycle_variational_epochs is not None:
+        config['cycle_variational_epochs'] = int(args.cycle_variational_epochs)
     
     # Create and run trainer
     trainer = UnifiedVAETrainer(config)

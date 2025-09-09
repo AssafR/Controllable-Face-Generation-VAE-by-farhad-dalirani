@@ -409,6 +409,26 @@ class TrainingUtilities:
     def print_configuration(self, mode: str = "Fresh") -> None:
         """Print training configuration."""
         self.config_manager.print_configuration(mode)
+        # If StrategyController is present via LossWeightManager (accessed at runtime), show strategy snapshot.
+        try:
+            from loss_weight_manager import LossWeightManager  # local import to avoid cycles
+            # Best-effort: create a transient manager to query strategy config snapshot
+            temp_lwm = LossWeightManager(self.config)
+            strategy = getattr(temp_lwm, 'strategy_controller', None)
+            if strategy is not None:
+                info = strategy.get_display_info()
+                print(f"\n🧭 STRATEGY CONFIGURATION:")
+                if info.get('cycle_enabled'):
+                    preset = self.config.get('cycle_preset', 'custom')
+                    print(f"  • Alternating cycle: ENABLED (preset={preset}, period={info.get('cycle_period')}, recon={info.get('cycle_recon_epochs')}, var={info.get('cycle_variational_epochs')})")
+                    print(f"  • Alternating cycle affects: MSE, L1, Perceptual, Generation, Beta")
+                else:
+                    print(f"  • Alternating cycle: DISABLED")
+                # Priority snapshot (if any)
+                if 'mse_priority_active' in info or 'priority_phase' in info:
+                    print(f"  • Priority: {info}")
+        except Exception:
+            pass
     
     def save_checkpoint(self, model, optimizer, scheduler, epoch: int,
                        train_metrics: Dict[str, float], val_metrics: Dict[str, float],

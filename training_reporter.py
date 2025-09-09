@@ -46,6 +46,8 @@ class TrainingReporter:
             'generation': {'strong': 5, 'good': 2},
             'kl': {'critical': 0.0001, 'weak': 0.01}
         }
+        # Track last printed strategy phase to avoid spamming
+        self._last_strategy_phase_name: Optional[str] = None
     
     def get_loss_contribution_analysis(self, train_metrics: Dict[str, float]) -> Dict[str, Dict[str, float]]:
         """
@@ -249,10 +251,71 @@ class TrainingReporter:
         lines.append(f"🎯 TOTAL LOSS: {train_metrics['loss']:.4f} (Train) | {val_metrics['loss']:.4f} (Val)")
         lines.append(f"📈 LEARNING RATE: {current_lr:.2e}")
         
-        # Training stage
+        # Training stage and strategy phase
         if self.loss_manager.stage_based:
             current_stage = self.loss_manager.get_current_stage_name()
             lines.append(f"🎭 TRAINING STAGE: {current_stage.upper()}")
+        # Strategy phase from centralized controller
+        try:
+            strategy = getattr(self.loss_manager, 'strategy_controller', None)
+            if strategy is not None:
+                s_info = strategy.get_display_info()
+                if s_info.get('cycle_enabled'):
+                    phase = s_info.get('phase', 'none')
+                    pos = s_info.get('phase_pos', 0)
+                    period = s_info.get('cycle_period', 0)
+                    # Summarize boosts/reductions for this phase and render inline
+                    try:
+                        effect_names = {
+                            'mse_weight': 'MSE',
+                            'l1_weight': 'L1',
+                            'perceptual_weight': 'Perceptual',
+                            'generation_weight': 'Generation',
+                            'beta': 'Beta',
+                        }
+                        ups, downs, neutrals = [], [], []
+                        for key in ['mse_weight', 'l1_weight', 'perceptual_weight', 'generation_weight', 'beta']:
+                            mult = getattr(strategy, 'get_multipliers')(key).get('cycle', 1.0)
+                            name = effect_names[key]
+                            if mult > 1.05:
+                                ups.append(name)
+                            elif mult < 0.95:
+                                downs.append(name)
+                            else:
+                                neutrals.append(name)
+                        summary_parts = []
+                        if ups:
+                            summary_parts.append(f"↑ {' '.join(ups)}")
+                        if downs:
+                            summary_parts.append(f"↓ {' '.join(downs)}")
+                        if neutrals:
+                            summary_parts.append(f"= {' '.join(neutrals)}")
+                        if summary_parts:
+                            lines.append(f"🧭 STRATEGY (this epoch): {phase} (pos {pos}/{period}) — {' | '.join(summary_parts)}")
+                        else:
+                            lines.append(f"🧭 STRATEGY (this epoch): {phase} (pos {pos}/{period})")
+                    except Exception:
+                        lines.append(f"🧭 STRATEGY (this epoch): {phase} (pos {pos}/{period})")
+                    # Verbose phase header printed once per phase switch
+                    if phase != self._last_strategy_phase_name:
+                        self._last_strategy_phase_name = phase
+                        lines.append(f"\n🧪 PHASE STRATEGY BREAKDOWN ({phase.upper()}):")
+                        lines.append(f"{'─'*60}")
+                        # Show base≈ × multipliers = final for key losses
+                        key_losses = ['mse_weight', 'l1_weight', 'perceptual_weight', 'generation_weight', 'beta']
+                        current_weights = self.loss_manager.get_all_weights()
+                        for lt in key_losses:
+                            if lt in current_weights:
+                                final_val = float(current_weights[lt])
+                                mults = strategy.get_multipliers(lt)
+                                combined = max(1e-12, mults.get('combined', 1.0))
+                                base_est = final_val / combined
+                                name = self.get_loss_display_name(lt)
+                                lines.append(
+                                    f"  {name:<12} base≈{base_est:.3f} × pri×{mults['priority']:.2f} × cyc×{mults['cycle']:.2f} = {final_val:.3f}"
+                                )
+        except Exception:
+            pass
         
         # Beta and perceptual weights
         beta_info = self.loss_manager.get_weight_info('beta')
@@ -303,7 +366,24 @@ class TrainingReporter:
                     if info['is_active'] and loss_type == f"{loss_type_name}_weight":
                         type_label += f" (PRIORITY ×{info['multiplier']:.1f})"
                 
-                lines.append(f"  {icon} {display_name:<12} {weight:.3f} ({type_label})")
+                # Strategy breakdown (base × multipliers = final)
+                base_label = 'scheduled'
+                if info['type'] == 'stage-based':
+                    base_label = f"stage:{info['stage']}"
+                # Estimate base from final / combined multiplier (safe if >0)
+                try:
+                    strategy = getattr(self.loss_manager, 'strategy_controller', None)
+                    if strategy is not None:
+                        mults = strategy.get_multipliers(loss_type)
+                        combined = max(1e-12, mults.get('combined', 1.0))
+                        base_est = weight / combined
+                        lines.append(
+                            f"  {icon} {display_name:<12} {weight:.3f} ({type_label}) => base≈{base_est:.3f} × pri×{mults['priority']:.2f} × cyc×{mults['cycle']:.2f}"
+                        )
+                    else:
+                        lines.append(f"  {icon} {display_name:<12} {weight:.3f} ({type_label})")
+                except Exception:
+                    lines.append(f"  {icon} {display_name:<12} {weight:.3f} ({type_label})")
         
         # Loss breakdown
         lines.append(f"\n🔍 LOSS BREAKDOWN:")
@@ -387,13 +467,22 @@ class TrainingReporter:
         else:
             lines.append(f"  ✅ 🔄 KL:           {kl_value:.4f} (raw) × {beta_weight:.3f} = {kl_weighted:.4f} ({kl_contrib:.0f}% of total)")
         
-        # Quick health check
+        # Quick health check and strategy recommendations
         lines.append(f"\n🏥 QUICK HEALTH CHECK:")
         lines.append(f"{'─'*40}")
         
         for loss_type, status in health_status.items():
             status_icon = self.get_status_icon(status['status'])
             lines.append(f"  {status_icon} {loss_type.title()}: {status['message']}")
+        # Strategy-linked recommendations
+        try:
+            strategy = getattr(self.loss_manager, 'strategy_controller', None)
+            if strategy is not None:
+                rec = strategy.get_recommendations()
+                for msg in rec.get('messages', []):
+                    lines.append(f"  💡 {msg}")
+        except Exception:
+            pass
         
         return '\n'.join(lines)
     
