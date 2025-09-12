@@ -9,6 +9,8 @@
         "input_img_size": 64,
         "batch_size": 128,
         "lr": 0.0001,
+        "optimizer": "adamw",
+        "optimizer_params": { "weight_decay": 0.01 },
         "max_epoch": 100,
         "log_dir": "logs",
         "dataset_dir": "celeba-dataset",
