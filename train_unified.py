@@ -766,7 +766,7 @@ class UnifiedVAETrainer:
         config_name = self.config.get('config_name', 'unified')
         checkpoint_path = f"checkpoints/{config_name}_training_checkpoint.pth"
         resumed = False
-        # Capture full command line for experiment logging
+        # Capture full command line for experiment logging (run_id is created in TrainingUtilities)
         try:
             command_line = ' '.join(sys.argv)
         except Exception:
@@ -1332,6 +1332,18 @@ def main():
         config['generation_weight'] = 0.0
         config['generation_schedule'] = False
     
+    # Propagate run_id into loss analysis config for logging linkage and set default log file paths under logs/
+    try:
+        if config.get('enable_loss_analysis', False):
+            la = config.setdefault('loss_analysis', {})
+            la['run_id'] = config.get('run_id')
+            # Default under config.log_dir
+            base_dir = config.get('log_dir', 'logs')
+            if 'log_file' not in la:
+                preset = config.get('loss_analysis_preset', 'standard')
+                la['log_file'] = os.path.join(base_dir, 'detailed_loss_analysis.json') if preset == 'detailed' else os.path.join(base_dir, 'loss_analysis.json')
+    except Exception:
+        pass
     # Create and run trainer
     trainer = UnifiedVAETrainer(config)
     trainer.train(resume=not args.no_resume)

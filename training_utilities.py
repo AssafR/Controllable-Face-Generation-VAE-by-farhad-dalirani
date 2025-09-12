@@ -10,6 +10,17 @@ import torch
 from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 import time
+class RunIdManager:
+    """Generates and holds a single run_id per process (single source of truth)."""
+
+    def __init__(self, config: Dict[str, Any]):
+        base = config.get('config_name', 'unified')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.run_id = f"{base}_{timestamp}"
+
+    def get_run_id(self) -> str:
+        return self.run_id
+
 
 
 class ConfigurationManager:
@@ -226,11 +237,12 @@ class ExperimentLogger:
     start/resume mode, checkpoint details, and config diffs when resuming.
     """
 
-    def __init__(self, config: Dict[str, Any], log_path: str = "experiments_log.jsonl"):
+    def __init__(self, config: Dict[str, Any], log_path: str = None):
         self.config = config
-        self.log_path = log_path
+        base_dir = config.get('log_dir', 'logs')
+        self.log_path = log_path or os.path.join(base_dir, 'experiments_log.jsonl')
         # Ensure directory exists if a nested path is provided
-        os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
+        os.makedirs(os.path.dirname(self.log_path) or ".", exist_ok=True)
 
     def _append(self, record: Dict[str, Any]) -> None:
         try:
@@ -238,6 +250,8 @@ class ExperimentLogger:
             safe_record = dict(record)
             safe_record.setdefault("timestamp", datetime.now().isoformat(timespec="seconds"))
             safe_record.setdefault("config_name", self.config.get("config_name", "unified"))
+            if self.config.get("run_id"):
+                safe_record.setdefault("run_id", self.config.get("run_id"))
             with open(self.log_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(safe_record, ensure_ascii=False) + "\n")
         except Exception as e:
@@ -351,7 +365,8 @@ class CheckpointManager:
             'train_metrics': train_metrics,
             'val_metrics': val_metrics,
             'best_val_loss': self.best_val_loss,
-            'config': self.config
+            'config': self.config,
+            'run_id': self.config.get('run_id')
         }
         
         # Save regular checkpoint
@@ -505,6 +520,9 @@ class TrainingUtilities:
         self.device = device
         
         # Initialize sub-managers
+        self.run_id_manager = RunIdManager(config)
+        # Persist run_id into config for downstream consumers
+        self.config['run_id'] = self.run_id_manager.get_run_id()
         self.config_manager = ConfigurationManager(config)
         self.checkpoint_manager = CheckpointManager(config, device)
         self.file_manager = FileManager(config)

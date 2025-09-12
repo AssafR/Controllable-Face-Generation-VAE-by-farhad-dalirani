@@ -59,9 +59,10 @@ class AnalysisConfig:
     
     # General parameters
     enable_logging: bool = True
-    log_file: str = "loss_analysis.json"
+    log_file: str = None
     save_plots: bool = True
     plot_dir: str = "loss_analysis_plots"
+    run_id: str = None
 
 
 class BaseLossAnalyzer(ABC):
@@ -102,9 +103,26 @@ class BaseLossAnalyzer(ABC):
             'health_score': result.health_score,
             'timestamp': result.timestamp.isoformat()
         }
+        if getattr(self.config, 'run_id', None):
+            log_data['run_id'] = self.config.run_id
         
         # Append to log file
-        log_file = self.config.log_file
+        # Determine default log file from config or fallback
+        base_dir = 'logs'
+        try:
+            # If Unified config provided this, it will be injected via create_loss_analysis_system
+            if getattr(self.config, 'log_file', None):
+                log_file = self.config.log_file
+            else:
+                # If no explicit file, choose based on presence of detailed preset outside
+                log_file = os.path.join(base_dir, 'loss_analysis.json')
+        except Exception:
+            log_file = os.path.join(base_dir, 'loss_analysis.json')
+        # Ensure logs directory exists
+        try:
+            os.makedirs(os.path.dirname(log_file) or ".", exist_ok=True)
+        except Exception:
+            pass
         if os.path.exists(log_file):
             with open(log_file, 'r') as f:
                 existing_data = json.load(f)
@@ -933,6 +951,9 @@ def create_loss_analysis_system(config: Dict[str, Any]) -> UnifiedLossAnalysisSy
     Returns:
         Configured UnifiedLossAnalysisSystem instance
     """
+    # Determine analysis log path from provided config, respecting global log_dir
+    base_dir = config.get('log_dir', 'logs')
+    desired_file = config.get('log_file') or os.path.join(base_dir, 'loss_analysis.json')
     analysis_config = AnalysisConfig(
         stuck_threshold=config.get('stuck_threshold', 0.001),
         stuck_patience=config.get('stuck_patience', 5),
@@ -943,9 +964,10 @@ def create_loss_analysis_system(config: Dict[str, Any]) -> UnifiedLossAnalysisSy
         pareto_weights=config.get('pareto_weights'),
         pareto_tolerance=config.get('pareto_tolerance', 0.01),
         enable_logging=config.get('enable_logging', True),
-        log_file=config.get('log_file', 'loss_analysis.json'),
+        log_file=desired_file,
         save_plots=config.get('save_plots', True),
-        plot_dir=config.get('plot_dir', 'loss_analysis_plots')
+        plot_dir=config.get('plot_dir', 'loss_analysis_plots'),
+        run_id=config.get('run_id')
     )
     
     return UnifiedLossAnalysisSystem(analysis_config)
