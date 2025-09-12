@@ -10,6 +10,7 @@
         "batch_size": 128,
         "lr": 0.0001,
         "max_epoch": 100,
+        "log_dir": "logs",
         "dataset_dir": "celeba-dataset",
         "model_save_path": "model_weights/",
         "dataset_subset": null

@@ -28,6 +28,13 @@ The model is trained on the CelebA dataset [1, 2], and TensorFlow Keras and Stre
 - See `test/README.md` for detailed information about available scripts
 - Run tests: `uv run test/test_unified_config.py` or `uv run test/demo_dataset_subsets.py`
 
+## Logging
+
+- Logs are written under `logs/`:
+  - `logs/experiments_log.jsonl`: run events with run_id
+  - `logs/detailed_loss_analysis.json` (or `logs/loss_analysis.json`): loss analysis entries
+- See `LOGGING_GUIDE.md` for PowerShell commands to filter by run_id and correlate runs.
+
 # Demo
 
 1. Controllable face generation with selected attributes and intensity of features.
