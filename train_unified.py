@@ -137,11 +137,8 @@ class UnifiedVAETrainer:
     
     def setup_optimizer(self):
         """Setup optimizer and scheduler."""
-        self.optimizer = optim.Adam(
-            self.model.parameters(), 
-            lr=self.config['lr'], 
-            weight_decay=1e-5
-        )
+        # Single source of truth: create optimizer via TrainingUtilities
+        self.optimizer, opt_name = self.utilities.create_optimizer(self.model.parameters(), self.config)
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, 
             mode='min', 
@@ -151,7 +148,13 @@ class UnifiedVAETrainer:
         )
         
         print(f"✅ Training setup complete:")
-        print(f"  • Optimizer: Adam (lr={self.config['lr']}, weight_decay=1e-5)")
+        # Friendly optimizer printout
+        try:
+            odisp = opt_name.upper()
+            lrdisp = self.optimizer.param_groups[0].get('lr')
+            print(f"  • Optimizer: {odisp} (lr={lrdisp})")
+        except Exception:
+            pass
         print(f"  • Scheduler: ReduceLROnPlateau (patience=8)")
         print(f"  • Batch size: {self.config['batch_size']}")
     
@@ -1000,6 +1003,13 @@ class UnifiedVAETrainer:
     
     def _print_epoch_summary(self, epoch, train_metrics, val_metrics, current_lr, gpu_stats):
         """Print epoch summary and control information."""
+        # Print run identifier for easy tracking across outputs
+        try:
+            rid = self.config.get('run_id')
+            if rid:
+                print(f"[run_id: {rid}]")
+        except Exception:
+            pass
         # Print epoch summary using the centralized reporter
         summary = self.reporter.format_epoch_summary(
             epoch=epoch,
@@ -1199,6 +1209,10 @@ def main():
                        help='Disable convergence-based early stopping; rely on patience only')
     parser.add_argument('--disable-genq', action='store_true',
                        help='Disable Generation Quality loss for this run')
+    parser.add_argument('--resume-run-id', type=str,
+                       help='Resume by specific run_id (loads matching checkpoint if available)')
+    parser.add_argument('--optimizer', type=str, choices=['adam', 'adamw', 'sgd', 'rmsprop'],
+                       help='Select optimizer for this run (overrides config)')
     
     args = parser.parse_args()
     
@@ -1213,6 +1227,10 @@ def main():
         dataset_preset=args.dataset_preset,
         loss_analysis_preset=effective_analysis_preset
     )
+    # Optimizer override from CLI
+    if args.optimizer is not None:
+        config['optimizer'] = args.optimizer.lower()
+
     
     # Override with command line arguments
     config['loss_analysis_interval'] = args.loss_analysis_interval
@@ -1358,6 +1376,10 @@ def main():
                 la['log_file'] = os.path.join(base_dir, 'detailed_loss_analysis.json') if preset == 'detailed' else os.path.join(base_dir, 'loss_analysis.json')
     except Exception:
         pass
+    # If resume-run-id is provided, set run_id in config early
+    if args.resume_run_id:
+        config['run_id'] = args.resume_run_id
+
     # Create and run trainer
     trainer = UnifiedVAETrainer(config)
     trainer.train(resume=not args.no_resume)

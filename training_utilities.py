@@ -10,6 +10,8 @@ import torch
 from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 import time
+import torch
+import torch.optim as optim
 class RunIdManager:
     """Generates and holds a single run_id per process (single source of truth)."""
 
@@ -606,6 +608,27 @@ class TrainingUtilities:
         return self.checkpoint_manager.save_checkpoint(
             model, optimizer, scheduler, epoch, train_metrics, val_metrics, is_best
         )
+
+    def create_optimizer(self, model_parameters, config: Dict[str, Any]):
+        """Create optimizer from config (single source of truth).
+
+        Supports: adam (default), adamw, sgd, rmsprop. Uses config['optimizer_params']
+        and ensures 'lr' defaults to config['lr'] if not provided.
+        Returns (optimizer, optimizer_name).
+        """
+        opt_name = str(config.get('optimizer', 'adam')).lower()
+        opt_params = dict(config.get('optimizer_params', {}))
+        opt_params.setdefault('lr', config.get('lr', 1e-3))
+        if opt_name == 'sgd':
+            optimizer = optim.SGD(model_parameters, **opt_params)
+        elif opt_name == 'adamw':
+            optimizer = optim.AdamW(model_parameters, **opt_params)
+        elif opt_name == 'rmsprop':
+            optimizer = optim.RMSprop(model_parameters, **opt_params)
+        else:
+            optimizer = optim.Adam(model_parameters, **opt_params)
+            opt_name = 'adam'
+        return optimizer, opt_name
     
     def load_checkpoint(self, checkpoint_path: str, model, optimizer, scheduler) -> Tuple[bool, int, Dict[str, float], Dict[str, Any]]:
         """Load training checkpoint."""

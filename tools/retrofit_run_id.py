@@ -199,7 +199,7 @@ def main():
                 }
                 with open(exp_path, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(assoc, ensure_ascii=False) + '\n')
-        # Retro-rename old files to new scheme where feasible
+        # Retro-rename old sample image files to new scheme where feasible
         # Patterns to migrate:
         #   <config>[_<run_id>]_generated_epoch_XXX[<suffix>].png -> <config>[_<run_id>]_epoch_XXX_generated[<suffix>].png
         #   <config>[_<run_id>]_reconstruction_epoch_XXX[<suffix>].png -> <config>[_<run_id>]_epoch_XXX_reconstruction[<suffix>].png
@@ -227,6 +227,71 @@ def main():
                         except Exception:
                             pass
                     break
+    except Exception:
+        pass
+
+    # Retro-rename checkpoints to include run_id for easier resume-by-id
+    try:
+        import torch, re
+        ckpt_dir = os.path.join(os.getcwd(), 'checkpoints')
+        all_pths = glob(os.path.join(ckpt_dir, '*.pth'))
+        pat_training = re.compile(r'^(.*)_training_checkpoint\.pth$')
+        pat_epoch = re.compile(r'^(.*)_checkpoint_epoch_(\d{3})\.pth$')
+        for ckpt in all_pths:
+            base = os.path.basename(ckpt)
+            rid = None
+            cfg_name = None
+            try:
+                chk = torch.load(ckpt, map_location='cpu')
+                cfg = chk.get('config', {}) if isinstance(chk, dict) else {}
+                rid = cfg.get('run_id')
+                cfg_name = cfg.get('config_name')
+            except Exception:
+                pass
+            # If no run_id is discoverable, try infer by windows and mtime
+            if not rid:
+                mtime = datetime.fromtimestamp(os.path.getmtime(ckpt))
+                # if we know cfg_name prefer that, else use prefix from filename later
+                candidates = windows
+                if cfg_name:
+                    candidates = [w for w in windows if w.get('run_id', '').startswith(cfg_name)]
+                # find covering window
+                chosen = None
+                for w in candidates:
+                    st, en = w.get('start'), w.get('end')
+                    if st and ((en and st <= mtime <= en) or (en is None and mtime >= st)):
+                        chosen = w
+                        break
+                if not chosen and candidates:
+                    chosen = candidates[-1]
+                if chosen:
+                    rid = chosen['run_id']
+
+            # Determine new filename if pattern matches
+            new_name = None
+            m = pat_training.match(base)
+            if m and rid:
+                prefix = m.group(1)
+                # Avoid double-inserting run_id
+                if rid not in base:
+                    new_name = f"{prefix}_{rid}_training_checkpoint.pth"
+            else:
+                m2 = pat_epoch.match(base)
+                if m2 and rid:
+                    prefix = m2.group(1)
+                    epoch = m2.group(2)
+                    if rid not in base:
+                        new_name = f"{prefix}_{rid}_checkpoint_epoch_{epoch}.pth"
+
+            if new_name:
+                new_path = os.path.join(ckpt_dir, new_name)
+                if new_path != ckpt and not os.path.exists(new_path):
+                    try:
+                        os.rename(ckpt, new_path)
+                        with open(exp_path, 'a', encoding='utf-8') as f:
+                            f.write(json.dumps({'event': 'checkpoint_renamed', 'from': ckpt, 'to': new_path}, ensure_ascii=False) + '\n')
+                    except Exception:
+                        pass
     except Exception:
         pass
 
