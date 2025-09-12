@@ -12,7 +12,7 @@ from typing import Optional
 class FilenameManager:
     """Centralized filename generation and management for VAE training."""
     
-    def __init__(self, config_name: str = 'unified'):
+    def __init__(self, config_name: str = 'unified', run_id: Optional[str] = None):
         """
         Initialize filename manager.
         
@@ -20,6 +20,7 @@ class FilenameManager:
             config_name: Configuration name used as prefix for all files
         """
         self.config_name = config_name
+        self.run_id = run_id
     
     def get_filename(self, file_type: str, epoch: Optional[int] = None, 
                     suffix: str = "", extension: str = "png", 
@@ -52,11 +53,18 @@ class FilenameManager:
         elif file_type == 'generated_samples':
             if epoch is None:
                 raise ValueError("epoch is required for generated_samples")
-            return os.path.join("sample_images", f"{self.config_name}_generated_epoch_{epoch:03d}{suffix}.png")
+            # New unified naming: <config>[ _<run_id> ]_epoch_XXX_generated[<suffix>].png
+            prefix = self.config_name
+            if self.run_id:
+                prefix = f"{prefix}_{self.run_id}"
+            return os.path.join("sample_images", f"{prefix}_epoch_{epoch:03d}_generated{suffix}.png")
         elif file_type == 'reconstruction_samples':
             if epoch is None:
                 raise ValueError("epoch is required for reconstruction_samples")
-            return os.path.join("sample_images", f"{self.config_name}_reconstruction_epoch_{epoch:03d}{suffix}.png")
+            prefix = self.config_name
+            if self.run_id:
+                prefix = f"{prefix}_{self.run_id}"
+            return os.path.join("sample_images", f"{prefix}_epoch_{epoch:03d}_reconstruction{suffix}.png")
         elif file_type == 'final_samples':
             return f"{self.config_name}_final_samples.png"
         elif file_type == 'log_dir':

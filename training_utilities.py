@@ -301,6 +301,17 @@ class ExperimentLogger:
             record["notes"] = notes
         self._append(record)
 
+    def log_image_saved(self, file_path: str, kind: str, epoch: Optional[int] = None) -> None:
+        """Log a saved image (generated or reconstruction)."""
+        record = {
+            "event": "image_saved",
+            "path": file_path,
+            "kind": kind,  # generated | reconstruction
+        }
+        if epoch is not None:
+            record["epoch"] = int(epoch)
+        self._append(record)
+
 
 def _shallow_config_view(cfg: Dict[str, Any]) -> Dict[str, Any]:
     """Return a compact, reproducible subset of config for logging.
@@ -439,6 +450,7 @@ class FileManager:
         self.config = config
         self.config_name = config.get('config_name', 'unified')
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.run_id = config.get('run_id')
     
     def get_filename(self, file_type: str, epoch: Optional[int] = None, 
                     suffix: str = "", extension: str = "png") -> str:
@@ -470,6 +482,8 @@ class FileManager:
             return f"runs/{self.config_name}_{self.timestamp}"
         
         elif file_type == "checkpoint":
+            if self.run_id:
+                return f"checkpoints/{self.config_name}_{self.run_id}_training_checkpoint.pth"
             return f"checkpoints/{self.config_name}_training_checkpoint.pth"
         
         elif file_type == "final_samples":
@@ -477,6 +491,32 @@ class FileManager:
         
         else:
             return f"{self.config_name}_{file_type}{suffix}.{extension}"
+
+    def find_latest_checkpoint(self) -> Optional[str]:
+        """Find latest checkpoint path for this config, considering run_id variants.
+
+        Preference order:
+        1) run_id-specific file if it exists
+        2) newest checkpoints/{config_name}_*_training_checkpoint.pth by mtime
+        3) legacy checkpoints/{config_name}_training_checkpoint.pth
+        """
+        import glob
+        # 1) Exact run_id
+        if self.run_id:
+            candidate = f"checkpoints/{self.config_name}_{self.run_id}_training_checkpoint.pth"
+            if os.path.exists(candidate):
+                return candidate
+        # 2) Any run_id variant
+        pattern = f"checkpoints/{self.config_name}_*_training_checkpoint.pth"
+        matches = glob.glob(pattern)
+        if matches:
+            matches.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+            return matches[0]
+        # 3) Legacy name
+        legacy = f"checkpoints/{self.config_name}_training_checkpoint.pth"
+        if os.path.exists(legacy):
+            return legacy
+        return None
     
     def clear_old_files(self) -> None:
         """Clear old model files and checkpoints for fresh start."""
@@ -497,6 +537,11 @@ class FileManager:
             shutil.rmtree(log_dir)
             print(f"    ✅ Cleared log directory: {log_dir}")
         
+        # Also remove any old run variants for this config
+        import glob
+        run_variants = glob.glob(f"checkpoints/{self.config_name}_*_training_checkpoint.pth")
+        files_to_clear.extend([p for p in run_variants if p not in files_to_clear])
+
         # Clear individual files
         cleared_count = 0
         for file_path in files_to_clear:

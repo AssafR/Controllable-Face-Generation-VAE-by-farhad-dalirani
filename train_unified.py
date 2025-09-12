@@ -696,11 +696,12 @@ class UnifiedVAETrainer:
             if self.writer is not None:
                 self.writer.log_images('Generated/Images', generated, epoch)
             
-            # Get clean config name for filename
-            config_name = self.config.get('config_name', 'unified')
+            # Use centralized FilenameManager as single source of truth
+            from utils import FilenameManager
+            fm = FilenameManager(self.config.get('config_name', 'unified'), self.config.get('run_id'))
             
             # Save sample images
-            sample_path = os.path.join(sample_dir, f"{config_name}_generated_epoch_{epoch+1:03d}{suffix}.png")
+            sample_path = fm.get_filename('generated_samples', epoch=epoch+1, suffix=suffix)
             titles = [f"Epoch {epoch+1} - Sample {i+1}" for i in range(8)]
             suptitle = self._build_suptitle(epoch, epoch_metrics)
             display_image_grid(
@@ -712,6 +713,11 @@ class UnifiedVAETrainer:
                 suptitle=suptitle,
             )
             print(f"  ✅ Sample images saved: {sample_path}")
+            try:
+                # Log the saved image
+                self.utilities.experiment_logger.log_image_saved(sample_path, kind='generated', epoch=epoch+1)
+            except Exception:
+                pass
             
             # Also generate reconstruction samples
             val_indices = torch.randperm(len(val_data))[:4]
@@ -722,7 +728,7 @@ class UnifiedVAETrainer:
             val_np = val_images.permute(0, 2, 3, 1).cpu().numpy()
             recon_np = reconstructed.permute(0, 2, 3, 1).cpu().numpy()
             
-            recon_path = os.path.join(sample_dir, f"{config_name}_reconstruction_epoch_{epoch+1:03d}{suffix}.png")
+            recon_path = fm.get_filename('reconstruction_samples', epoch=epoch+1, suffix=suffix)
             comp_title = self._build_suptitle(epoch, epoch_metrics)
             display_comparison_grid(
                 val_np,
@@ -734,6 +740,10 @@ class UnifiedVAETrainer:
                 suptitle=comp_title,
             )
             print(f"  ✅ Reconstruction samples saved: {recon_path}")
+            try:
+                self.utilities.experiment_logger.log_image_saved(recon_path, kind='reconstruction', epoch=epoch+1)
+            except Exception:
+                pass
     
     def train(self, resume=True):
         """Main training loop."""
@@ -764,7 +774,7 @@ class UnifiedVAETrainer:
         
         # Handle checkpoint loading/clearing
         config_name = self.config.get('config_name', 'unified')
-        checkpoint_path = f"checkpoints/{config_name}_training_checkpoint.pth"
+        checkpoint_path = self.utilities.get_filename("checkpoint")
         resumed = False
         # Capture full command line for experiment logging (run_id is created in TrainingUtilities)
         try:
@@ -780,6 +790,10 @@ class UnifiedVAETrainer:
             except Exception:
                 pass
         elif resume:
+            if not os.path.exists(checkpoint_path):
+                latest_ckpt = self.utilities.file_manager.find_latest_checkpoint()
+                if latest_ckpt:
+                    checkpoint_path = latest_ckpt
             success, last_epoch, _, loaded_config = self.utilities.load_checkpoint(checkpoint_path, self.model, self.optimizer, self.scheduler)
             if success:
                 # Resume training from the next epoch so schedules continue correctly

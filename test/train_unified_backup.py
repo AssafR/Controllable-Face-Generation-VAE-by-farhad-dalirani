@@ -552,7 +552,7 @@ class UnifiedVAETrainer:
             config_name = self.config.get('config_name', 'unified')
             
             # Save sample images
-            sample_path = os.path.join(sample_dir, f"{config_name}_generated_epoch_{epoch+1:03d}{suffix}.png")
+            sample_path = os.path.join(sample_dir, f"{config_name}_epoch_{epoch+1:03d}_generated{suffix}.png")
             titles = [f"Epoch {epoch+1} - Sample {i+1}" for i in range(8)]
             display_image_grid(generated_np, 
                               titles=titles,
@@ -570,7 +570,7 @@ class UnifiedVAETrainer:
             val_np = val_images.permute(0, 2, 3, 1).cpu().numpy()
             recon_np = reconstructed.permute(0, 2, 3, 1).cpu().numpy()
             
-            recon_path = os.path.join(sample_dir, f"{config_name}_reconstruction_epoch_{epoch+1:03d}{suffix}.png")
+            recon_path = os.path.join(sample_dir, f"{config_name}_epoch_{epoch+1:03d}_reconstruction{suffix}.png")
             display_comparison_grid(val_np, recon_np,
                                    titles=[f"Epoch {epoch+1} - Pair {i+1}" for i in range(4)],
                                    max_cols=2, 

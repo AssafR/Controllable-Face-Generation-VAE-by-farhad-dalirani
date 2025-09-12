@@ -29,8 +29,8 @@ def create_training_progress_video():
         return
     
     # Find all generated images (clean filename format)
-    generated_files = sorted(glob.glob(os.path.join(sample_dir, "fast_high_quality_generated_epoch_*.png")))
-    reconstruction_files = sorted(glob.glob(os.path.join(sample_dir, "fast_high_quality_reconstruction_epoch_*.png")))
+    generated_files = sorted(glob.glob(os.path.join(sample_dir, "fast_high_quality_epoch_*_generated*.png")))
+    reconstruction_files = sorted(glob.glob(os.path.join(sample_dir, "fast_high_quality_epoch_*_reconstruction*.png")))
     
     print(f"📁 Found {len(generated_files)} generated image files")
     print(f"📁 Found {len(reconstruction_files)} reconstruction image files")
@@ -144,8 +144,8 @@ def monitor_sample_directory():
         return
     
     # Count files
-    generated_files = glob.glob(os.path.join(sample_dir, "fast_high_quality_generated_epoch_*.png"))
-    reconstruction_files = glob.glob(os.path.join(sample_dir, "fast_high_quality_reconstruction_epoch_*.png"))
+    generated_files = glob.glob(os.path.join(sample_dir, "fast_high_quality_epoch_*_generated*.png"))
+    reconstruction_files = glob.glob(os.path.join(sample_dir, "fast_high_quality_epoch_*_reconstruction*.png"))
     
     print(f"📊 Sample Images Directory Status:")
     print(f"  • Generated images: {len(generated_files)}")

@@ -12,7 +12,8 @@
     },
     "recommendations": [],
     "health_score": 0.5,
-    "timestamp": "2025-09-08T08:13:24.476958"
+    "timestamp": "2025-09-08T08:13:24.476958",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 0,
@@ -41,7 +42,8 @@
       "High reference loss volatility - consider stabilizing training"
     ],
     "health_score": 0.3,
-    "timestamp": "2025-09-08T08:13:24.477958"
+    "timestamp": "2025-09-08T08:13:24.477958",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 0,
@@ -69,7 +71,8 @@
       "Poor objective balance - some objectives dominating others"
     ],
     "health_score": 0.8880866338080731,
-    "timestamp": "2025-09-08T08:13:24.485959"
+    "timestamp": "2025-09-08T08:13:24.485959",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 1,
@@ -90,7 +93,8 @@
     },
     "recommendations": [],
     "health_score": 0.5,
-    "timestamp": "2025-09-08T08:13:24.496960"
+    "timestamp": "2025-09-08T08:13:24.496960",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 1,
@@ -119,7 +123,8 @@
       "High reference loss volatility - consider stabilizing training"
     ],
     "health_score": 0.3,
-    "timestamp": "2025-09-08T08:13:24.505964"
+    "timestamp": "2025-09-08T08:13:24.505964",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 1,
@@ -148,7 +153,8 @@
       "Weighted objective sum increasing - consider rebalancing"
     ],
     "health_score": 0.9012970882141644,
-    "timestamp": "2025-09-08T08:13:24.515961"
+    "timestamp": "2025-09-08T08:13:24.515961",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 2,
@@ -172,7 +178,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:24.530965"
+    "timestamp": "2025-09-08T08:13:24.530965",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 2,
@@ -200,7 +207,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:24.541960"
+    "timestamp": "2025-09-08T08:13:24.541960",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 2,
@@ -228,7 +236,8 @@
       "Poor objective balance - some objectives dominating others"
     ],
     "health_score": 0.8887442866332201,
-    "timestamp": "2025-09-08T08:13:24.551964"
+    "timestamp": "2025-09-08T08:13:24.551964",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 3,
@@ -254,7 +263,8 @@
       "Loss is worsening - consider reducing learning rate or checking for overfitting"
     ],
     "health_score": 0.0,
-    "timestamp": "2025-09-08T08:13:24.563960"
+    "timestamp": "2025-09-08T08:13:24.563960",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 3,
@@ -285,7 +295,8 @@
       "Reference loss deteriorating - check for overfitting or learning rate issues"
     ],
     "health_score": 0.1936262565085372,
-    "timestamp": "2025-09-08T08:13:24.573964"
+    "timestamp": "2025-09-08T08:13:24.573964",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 3,
@@ -314,7 +325,8 @@
       "Weighted objective sum increasing - consider rebalancing"
     ],
     "health_score": 0.9176366398490153,
-    "timestamp": "2025-09-08T08:13:24.582963"
+    "timestamp": "2025-09-08T08:13:24.582963",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 4,
@@ -338,7 +350,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:24.592963"
+    "timestamp": "2025-09-08T08:13:24.592963",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 4,
@@ -366,7 +379,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:24.601961"
+    "timestamp": "2025-09-08T08:13:24.601961",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 4,
@@ -394,7 +408,8 @@
       "Poor objective balance - some objectives dominating others"
     ],
     "health_score": 0.892815446901963,
-    "timestamp": "2025-09-08T08:13:24.612962"
+    "timestamp": "2025-09-08T08:13:24.612962",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 5,
@@ -418,7 +433,8 @@
     },
     "recommendations": [],
     "health_score": 0.6000000000000001,
-    "timestamp": "2025-09-08T08:13:24.621964"
+    "timestamp": "2025-09-08T08:13:24.621964",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 5,
@@ -448,7 +464,8 @@
       "Reference loss deteriorating - check for overfitting or learning rate issues"
     ],
     "health_score": 0.7943906142320862,
-    "timestamp": "2025-09-08T08:13:24.632964"
+    "timestamp": "2025-09-08T08:13:24.632964",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 5,
@@ -477,7 +494,8 @@
       "Weighted objective sum increasing - consider rebalancing"
     ],
     "health_score": 0.8897102996779548,
-    "timestamp": "2025-09-08T08:13:24.642964"
+    "timestamp": "2025-09-08T08:13:24.642964",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 6,
@@ -501,7 +519,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:24.651961"
+    "timestamp": "2025-09-08T08:13:24.651961",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 6,
@@ -529,7 +548,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:24.662959"
+    "timestamp": "2025-09-08T08:13:24.662959",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 6,
@@ -557,7 +577,8 @@
       "Poor objective balance - some objectives dominating others"
     ],
     "health_score": 0.9005951708432305,
-    "timestamp": "2025-09-08T08:13:24.674960"
+    "timestamp": "2025-09-08T08:13:24.674960",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 7,
@@ -581,7 +602,8 @@
     },
     "recommendations": [],
     "health_score": 0.6000000000000001,
-    "timestamp": "2025-09-08T08:13:24.686963"
+    "timestamp": "2025-09-08T08:13:24.686963",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 7,
@@ -611,7 +633,8 @@
       "Reference loss deteriorating - check for overfitting or learning rate issues"
     ],
     "health_score": 0.7969807995433524,
-    "timestamp": "2025-09-08T08:13:24.698964"
+    "timestamp": "2025-09-08T08:13:24.698964",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 7,
@@ -640,7 +663,8 @@
       "Weighted objective sum increasing - consider rebalancing"
     ],
     "health_score": 0.9023970842946614,
-    "timestamp": "2025-09-08T08:13:24.710963"
+    "timestamp": "2025-09-08T08:13:24.710963",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 8,
@@ -664,7 +688,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:24.721960"
+    "timestamp": "2025-09-08T08:13:24.721960",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 8,
@@ -692,7 +717,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:24.733962"
+    "timestamp": "2025-09-08T08:13:24.733962",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 8,
@@ -721,7 +747,8 @@
       "Weighted objective sum increasing - consider rebalancing"
     ],
     "health_score": 0.8725032894491986,
-    "timestamp": "2025-09-08T08:13:24.745963"
+    "timestamp": "2025-09-08T08:13:24.745963",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 9,
@@ -747,7 +774,8 @@
       "Training appears stuck - consider adjusting learning rate or loss weights"
     ],
     "health_score": 0.8,
-    "timestamp": "2025-09-08T08:13:24.755964"
+    "timestamp": "2025-09-08T08:13:24.755964",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 9,
@@ -775,7 +803,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:24.767962"
+    "timestamp": "2025-09-08T08:13:24.767962",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 9,
@@ -803,7 +832,8 @@
       "Poor objective balance - some objectives dominating others"
     ],
     "health_score": 0.8878499589361816,
-    "timestamp": "2025-09-08T08:13:24.780963"
+    "timestamp": "2025-09-08T08:13:24.780963",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 10,
@@ -829,7 +859,8 @@
       "Training appears stuck - consider adjusting learning rate or loss weights"
     ],
     "health_score": 0.0,
-    "timestamp": "2025-09-08T08:13:24.791962"
+    "timestamp": "2025-09-08T08:13:24.791962",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 10,
@@ -860,7 +891,8 @@
       "Reference loss deteriorating - check for overfitting or learning rate issues"
     ],
     "health_score": 0.5995231216823236,
-    "timestamp": "2025-09-08T08:13:24.803963"
+    "timestamp": "2025-09-08T08:13:24.803963",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 10,
@@ -889,7 +921,8 @@
       "Weighted objective sum increasing - consider rebalancing"
     ],
     "health_score": 0.8790221763785832,
-    "timestamp": "2025-09-08T08:13:24.814959"
+    "timestamp": "2025-09-08T08:13:24.814959",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 11,
@@ -913,7 +946,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:24.828961"
+    "timestamp": "2025-09-08T08:13:24.828961",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 11,
@@ -941,7 +975,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:24.840965"
+    "timestamp": "2025-09-08T08:13:24.840965",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 11,
@@ -969,7 +1004,8 @@
       "Poor objective balance - some objectives dominating others"
     ],
     "health_score": 0.8931707713252002,
-    "timestamp": "2025-09-08T08:13:24.851963"
+    "timestamp": "2025-09-08T08:13:24.851963",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 12,
@@ -993,7 +1029,8 @@
     },
     "recommendations": [],
     "health_score": 0.2,
-    "timestamp": "2025-09-08T08:13:24.864960"
+    "timestamp": "2025-09-08T08:13:24.864960",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 12,
@@ -1024,7 +1061,8 @@
       "Reference loss deteriorating - check for overfitting or learning rate issues"
     ],
     "health_score": 0.5978578694937078,
-    "timestamp": "2025-09-08T08:13:24.876960"
+    "timestamp": "2025-09-08T08:13:24.876960",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 12,
@@ -1053,7 +1091,8 @@
       "Weighted objective sum increasing - consider rebalancing"
     ],
     "health_score": 0.8970872225612618,
-    "timestamp": "2025-09-08T08:13:24.888961"
+    "timestamp": "2025-09-08T08:13:24.888961",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 13,
@@ -1077,7 +1116,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:24.900960"
+    "timestamp": "2025-09-08T08:13:24.900960",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 13,
@@ -1105,7 +1145,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:24.913960"
+    "timestamp": "2025-09-08T08:13:24.913960",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 13,
@@ -1133,7 +1174,8 @@
       "Poor objective balance - some objectives dominating others"
     ],
     "health_score": 0.8893989515444211,
-    "timestamp": "2025-09-08T08:13:24.926964"
+    "timestamp": "2025-09-08T08:13:24.926964",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 14,
@@ -1157,7 +1199,8 @@
     },
     "recommendations": [],
     "health_score": 0.6000000000000001,
-    "timestamp": "2025-09-08T08:13:24.937962"
+    "timestamp": "2025-09-08T08:13:24.937962",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 14,
@@ -1187,7 +1230,8 @@
       "Reference loss deteriorating - check for overfitting or learning rate issues"
     ],
     "health_score": 0.7957286073105789,
-    "timestamp": "2025-09-08T08:13:24.949964"
+    "timestamp": "2025-09-08T08:13:24.949964",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 14,
@@ -1216,7 +1260,8 @@
       "Weighted objective sum increasing - consider rebalancing"
     ],
     "health_score": 0.8931930256894124,
-    "timestamp": "2025-09-08T08:13:24.962971"
+    "timestamp": "2025-09-08T08:13:24.962971",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 15,
@@ -1240,7 +1285,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:24.975487"
+    "timestamp": "2025-09-08T08:13:24.975487",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 15,
@@ -1268,7 +1314,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:24.988004"
+    "timestamp": "2025-09-08T08:13:24.988004",
+    "run_id": "unified_20250908_081324"
   },
   {
     "epoch": 15,
@@ -1296,7 +1343,8 @@
       "Poor objective balance - some objectives dominating others"
     ],
     "health_score": 0.887585286977869,
-    "timestamp": "2025-09-08T08:13:25.001004"
+    "timestamp": "2025-09-08T08:13:25.001004",
+    "run_id": "unified_20250908_081325"
   },
   {
     "epoch": 16,
@@ -1320,7 +1368,8 @@
     },
     "recommendations": [],
     "health_score": 0.6000000000000001,
-    "timestamp": "2025-09-08T08:13:25.018010"
+    "timestamp": "2025-09-08T08:13:25.018010",
+    "run_id": "unified_20250908_081325"
   },
   {
     "epoch": 16,
@@ -1350,7 +1399,8 @@
       "Reference loss deteriorating - check for overfitting or learning rate issues"
     ],
     "health_score": 0.796453854158244,
-    "timestamp": "2025-09-08T08:13:25.031012"
+    "timestamp": "2025-09-08T08:13:25.031012",
+    "run_id": "unified_20250908_081325"
   },
   {
     "epoch": 16,
@@ -1379,7 +1429,8 @@
       "Weighted objective sum increasing - consider rebalancing"
     ],
     "health_score": 0.8921054703835406,
-    "timestamp": "2025-09-08T08:13:25.045044"
+    "timestamp": "2025-09-08T08:13:25.045044",
+    "run_id": "unified_20250908_081325"
   },
   {
     "epoch": 17,
@@ -1405,7 +1456,8 @@
       "Loss is worsening - consider reducing learning rate or checking for overfitting"
     ],
     "health_score": 0.4,
-    "timestamp": "2025-09-08T08:13:25.057041"
+    "timestamp": "2025-09-08T08:13:25.057041",
+    "run_id": "unified_20250908_081325"
   },
   {
     "epoch": 17,
@@ -1435,7 +1487,8 @@
       "Reference loss is worsening - consider fundamental training adjustments"
     ],
     "health_score": 0.5967340661655667,
-    "timestamp": "2025-09-08T08:13:25.071043"
+    "timestamp": "2025-09-08T08:13:25.071043",
+    "run_id": "unified_20250908_081325"
   },
   {
     "epoch": 17,
@@ -1463,7 +1516,8 @@
       "Poor objective balance - some objectives dominating others"
     ],
     "health_score": 0.8829405972273903,
-    "timestamp": "2025-09-08T08:13:25.084560"
+    "timestamp": "2025-09-08T08:13:25.084560",
+    "run_id": "unified_20250908_081325"
   },
   {
     "epoch": 18,
@@ -1487,7 +1541,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:25.097560"
+    "timestamp": "2025-09-08T08:13:25.097560",
+    "run_id": "unified_20250908_081325"
   },
   {
     "epoch": 18,
@@ -1515,7 +1570,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:25.111557"
+    "timestamp": "2025-09-08T08:13:25.111557",
+    "run_id": "unified_20250908_081325"
   },
   {
     "epoch": 18,
@@ -1544,7 +1600,8 @@
       "Weighted objective sum increasing - consider rebalancing"
     ],
     "health_score": 0.8655436765297264,
-    "timestamp": "2025-09-08T08:13:25.124562"
+    "timestamp": "2025-09-08T08:13:25.124562",
+    "run_id": "unified_20250908_081325"
   },
   {
     "epoch": 19,
@@ -1568,7 +1625,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:25.138557"
+    "timestamp": "2025-09-08T08:13:25.138557",
+    "run_id": "unified_20250908_081325"
   },
   {
     "epoch": 19,
@@ -1596,7 +1654,8 @@
     },
     "recommendations": [],
     "health_score": 1.0,
-    "timestamp": "2025-09-08T08:13:25.152562"
+    "timestamp": "2025-09-08T08:13:25.152562",
+    "run_id": "unified_20250908_081325"
   },
   {
     "epoch": 19,
@@ -1624,6 +1683,7 @@
       "Poor objective balance - some objectives dominating others"
     ],
     "health_score": 0.8654539427652278,
-    "timestamp": "2025-09-08T08:13:25.166556"
+    "timestamp": "2025-09-08T08:13:25.166556",
+    "run_id": "unified_20250908_081325"
   }
 ]
