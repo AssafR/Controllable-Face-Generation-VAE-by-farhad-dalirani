@@ -117,7 +117,9 @@ class ConfigurationManager:
         
         # Logging
         if loss_analysis_config.get('enable_logging', False):
-            log_file = loss_analysis_config.get('log_file', 'loss_analysis.json')
+            base_dir = self.config.get('log_dir', 'logs')
+            lf = loss_analysis_config.get('log_file', 'loss_analysis.json')
+            log_file = lf if os.path.dirname(lf) else os.path.join(base_dir, lf)
             print(f"  • Logging: Enabled ({log_file})")
         else:
             print(f"  • Logging: Disabled")

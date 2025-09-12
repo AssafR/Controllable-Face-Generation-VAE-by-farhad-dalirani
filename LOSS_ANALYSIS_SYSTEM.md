@@ -160,9 +160,10 @@ config = {
     
     # Logging
     'enable_logging': True,          # Enable JSON logging
-    'log_file': 'loss_analysis.json', # Log file path
+    # Paths are resolved relative to config['log_dir'] when no directory is provided
+    'log_file': 'loss_analysis.json', # Log file path (e.g., logs/loss_analysis.json)
     'save_plots': True,              # Save analysis plots
-    'plot_dir': 'loss_analysis_plots' # Plot directory
+    'plot_dir': 'loss_analysis_plots' # Plot directory (e.g., logs/loss_analysis_plots)
 }
 ```
 

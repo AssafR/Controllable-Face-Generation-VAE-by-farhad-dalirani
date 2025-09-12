@@ -953,7 +953,15 @@ def create_loss_analysis_system(config: Dict[str, Any]) -> UnifiedLossAnalysisSy
     """
     # Determine analysis log path from provided config, respecting global log_dir
     base_dir = config.get('log_dir', 'logs')
-    desired_file = config.get('log_file') or os.path.join(base_dir, 'loss_analysis.json')
+    provided_file = config.get('log_file')
+    if provided_file:
+        # If no directory component is present, place it under base_dir
+        desired_file = provided_file if os.path.dirname(provided_file) else os.path.join(base_dir, provided_file)
+    else:
+        desired_file = os.path.join(base_dir, 'loss_analysis.json')
+    # Plot directory normalization: put under base_dir if relative name without directory
+    provided_plot_dir = config.get('plot_dir', 'loss_analysis_plots')
+    desired_plot_dir = provided_plot_dir if os.path.dirname(provided_plot_dir) else os.path.join(base_dir, provided_plot_dir)
     analysis_config = AnalysisConfig(
         stuck_threshold=config.get('stuck_threshold', 0.001),
         stuck_patience=config.get('stuck_patience', 5),
@@ -966,7 +974,7 @@ def create_loss_analysis_system(config: Dict[str, Any]) -> UnifiedLossAnalysisSy
         enable_logging=config.get('enable_logging', True),
         log_file=desired_file,
         save_plots=config.get('save_plots', True),
-        plot_dir=config.get('plot_dir', 'loss_analysis_plots'),
+        plot_dir=desired_plot_dir,
         run_id=config.get('run_id')
     )
     
