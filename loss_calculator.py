@@ -296,9 +296,9 @@ class LossCalculator:
         
         # Default weights
         default_weights = {
-            'edge': 0.4,
-            'diversity': 0.3,
-            'contrast': 0.3
+            'edge': 0.2,
+            'diversity': 0.4,
+            'contrast': 0.4
         }
         
         # Use config values if available, otherwise defaults

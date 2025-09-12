@@ -134,7 +134,7 @@
             "lpips_weight": 0.0,
             "perceptual_schedule": true,
             "perceptual_start": 0.0,
-            "perceptual_end": 0.01,
+            "perceptual_end": 0.02,
             "perceptual_warmup_epochs": 45
         },
         
@@ -313,10 +313,10 @@
             "lr": 0.0001,
             "beta_schedule": true,
             "beta_start": 0.0,
-            "beta_end": 0.1,
+            "beta_end": 0.3,
             "perceptual_schedule": true,
             "perceptual_start": 0.0,
-            "perceptual_end": 0.01,
+            "perceptual_end": 0.02,
             "perceptual_warmup_epochs": 45,
             "generation_schedule": true,
             "generation_start": 0.0,
@@ -388,10 +388,10 @@
             "_use_case": "High quality with optimal training speed on RTX 3090",
             "max_epoch": 100,
             "batch_size": 256,
-            "lr": 0.0002,
+            "lr": 0.00025,
             "beta_schedule": true,
             "beta_start": 0.0,
-            "beta_end": 1.5,
+            "beta_end": 2.0,
             "perceptual_schedule": true,
             "perceptual_start": 0.0,
             "perceptual_end": 0.6,
@@ -574,6 +574,14 @@
             "_use_case": "Production training, best possible quality",
             "dataset_subset": null
         }
+    },
+    
+    "generation_quality_config": {
+        "_comment": "Generation Quality loss component weights",
+        "_description": "Controls the relative importance of edge, diversity, and contrast losses in Generation Quality",
+        "edge_weight": 0.4,
+        "diversity_weight": 0.3,
+        "contrast_weight": 0.3
     },
     
     "loss_analysis_presets": {

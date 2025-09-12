@@ -48,7 +48,7 @@ from training_reporter import TrainingReporter
 from training_writer import create_training_writer
 from perceptual_loss import create_perceptual_loss, get_perceptual_loss_info
 from loss_calculator import create_loss_calculator
-from training_utilities import create_training_utilities
+from training_utilities import create_training_utilities, _shallow_config_view
 from loss_analysis_system import create_loss_analysis_system, AnalysisMethod
 
 # VGGPerceptualLoss class moved to perceptual_loss.py
@@ -766,11 +766,21 @@ class UnifiedVAETrainer:
         config_name = self.config.get('config_name', 'unified')
         checkpoint_path = f"checkpoints/{config_name}_training_checkpoint.pth"
         resumed = False
+        # Capture full command line for experiment logging
+        try:
+            command_line = ' '.join(sys.argv)
+        except Exception:
+            command_line = ''
         if not resume:
             # Clear old checkpoints and model files for fresh start
             self.utilities.clear_old_files()
+            # Log run start (fresh)
+            try:
+                self.utilities.experiment_logger.log_run_start(command_line, mode="Fresh", extras={"no_resume": True})
+            except Exception:
+                pass
         elif resume:
-            success, last_epoch, _ = self.utilities.load_checkpoint(checkpoint_path, self.model, self.optimizer, self.scheduler)
+            success, last_epoch, _, loaded_config = self.utilities.load_checkpoint(checkpoint_path, self.model, self.optimizer, self.scheduler)
             if success:
                 # Resume training from the next epoch so schedules continue correctly
                 self.start_epoch = min(last_epoch + 1, self.config['max_epoch'] - 1)
@@ -778,6 +788,33 @@ class UnifiedVAETrainer:
                 self.best_ref_val = self.utilities.checkpoint_manager.best_val_loss
                 print(f"  🔁 Resuming from epoch {self.start_epoch} (best val: {self.best_ref_val:.6f})")
                 resumed = True
+                # Log run start (resume) with config diff
+                try:
+                    shallow_loaded = _shallow_config_view(loaded_config) if loaded_config else {}
+                    shallow_current = _shallow_config_view(self.config)
+                    # Compute simple diff
+                    diff = {}
+                    keys = set(shallow_loaded.keys()).union(shallow_current.keys())
+                    for k in keys:
+                        if shallow_loaded.get(k) != shallow_current.get(k):
+                            diff[k] = {"checkpoint": shallow_loaded.get(k), "current": shallow_current.get(k)}
+                    self.utilities.experiment_logger.log_run_start(command_line, mode="Resume")
+                    self.utilities.experiment_logger.log_resume_details(
+                        checkpoint_path=checkpoint_path,
+                        epoch=last_epoch,
+                        best_val_loss=self.best_ref_val,
+                        checkpoint_config=loaded_config,
+                        current_config=self.config,
+                        config_diff=diff,
+                    )
+                except Exception:
+                    pass
+            else:
+                # Log run start (fresh due to missing checkpoint)
+                try:
+                    self.utilities.experiment_logger.log_run_start(command_line, mode="Fresh", extras={"resume_requested": True, "checkpoint_found": False})
+                except Exception:
+                    pass
         
         # Now print initial configuration with accurate mode
         self.utilities.print_configuration("Resume" if resumed else "Fresh")
@@ -811,6 +848,12 @@ class UnifiedVAETrainer:
             print(f"\n🎨 Generating final samples...")
             # Use suffix-based saving inside generate_samples
             self.generate_samples(last_epoch, val_loader.dataset, suffix="_final")
+            # Log run end
+            try:
+                status = "completed"
+                self.utilities.experiment_logger.log_run_end(status=status, best_val_loss=self.best_ref_val, epochs_completed=(last_epoch + 1))
+            except Exception:
+                pass
         
         finally:
             # Ensure writer is properly closed
@@ -884,6 +927,16 @@ class UnifiedVAETrainer:
                 print(f"\n🛑 Early stopping triggered after {epoch+1} epochs{reason}")
             except Exception:
                 print(f"\n🛑 Early stopping triggered after {epoch+1} epochs")
+            # Log run end for early stopping
+            try:
+                self.utilities.experiment_logger.log_run_end(
+                    status="early_stopped",
+                    best_val_loss=self.best_ref_val,
+                    epochs_completed=(epoch + 1),
+                    notes=reason if 'reason' in locals() else None,
+                )
+            except Exception:
+                pass
             return True
         
         # Time estimation

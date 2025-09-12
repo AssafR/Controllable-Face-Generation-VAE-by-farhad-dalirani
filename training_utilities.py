@@ -219,6 +219,99 @@ class ConfigurationManager:
                 return "VGG Standard (5 layers)"
 
 
+class ExperimentLogger:
+    """Centralized experiment logger (single source of truth).
+
+    Writes JSONL entries to experiments_log.jsonl, capturing command line,
+    start/resume mode, checkpoint details, and config diffs when resuming.
+    """
+
+    def __init__(self, config: Dict[str, Any], log_path: str = "experiments_log.jsonl"):
+        self.config = config
+        self.log_path = log_path
+        # Ensure directory exists if a nested path is provided
+        os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
+
+    def _append(self, record: Dict[str, Any]) -> None:
+        try:
+            # Add standard fields
+            safe_record = dict(record)
+            safe_record.setdefault("timestamp", datetime.now().isoformat(timespec="seconds"))
+            safe_record.setdefault("config_name", self.config.get("config_name", "unified"))
+            with open(self.log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(safe_record, ensure_ascii=False) + "\n")
+        except Exception as e:
+            print(f"  ⚠️  Experiment logging failed: {e}")
+
+    def log_run_start(self, command_line: str, mode: str, extras: Optional[Dict[str, Any]] = None) -> None:
+        record = {
+            "event": "run_start",
+            "mode": mode,  # Fresh | Resume
+            "command_line": command_line,
+            "cwd": os.getcwd(),
+        }
+        if extras:
+            record.update(extras)
+        self._append(record)
+
+    def log_resume_details(self, checkpoint_path: str, epoch: int, best_val_loss: float,
+                           checkpoint_config: Optional[Dict[str, Any]],
+                           current_config: Optional[Dict[str, Any]],
+                           config_diff: Optional[Dict[str, Any]]) -> None:
+        record = {
+            "event": "resume",
+            "checkpoint_path": checkpoint_path,
+            "restored_epoch": epoch,
+            "best_val_loss": best_val_loss,
+            "config_changed": bool(config_diff) if config_diff is not None else False,
+            "config_diff": config_diff or {},
+        }
+        # For reproducibility, also store compact copies of configs
+        if checkpoint_config is not None:
+            record["checkpoint_config_snapshot"] = _shallow_config_view(checkpoint_config)
+        if current_config is not None:
+            record["current_config_snapshot"] = _shallow_config_view(current_config)
+        self._append(record)
+
+    def log_run_end(self, status: str, best_val_loss: float, epochs_completed: int,
+                    notes: Optional[str] = None) -> None:
+        record = {
+            "event": "run_end",
+            "status": status,  # completed | interrupted | failed | early_stopped
+            "best_val_loss": best_val_loss,
+            "epochs_completed": epochs_completed,
+        }
+        if notes:
+            record["notes"] = notes
+        self._append(record)
+
+
+def _shallow_config_view(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a compact, reproducible subset of config for logging.
+
+    Keeps key training-relevant fields without huge nested structures.
+    """
+    keys = [
+        "config_name", "embedding_size", "num_channels", "input_img_size", "batch_size", "lr",
+        "max_epoch", "beta", "beta_schedule", "beta_start", "beta_end",
+        "perceptual_schedule", "perceptual_start", "perceptual_end", "perceptual_warmup_epochs",
+        "generation_schedule", "generation_start", "generation_end", "generation_warmup_epochs",
+        "early_stopping_patience", "enable_loss_analysis", "loss_analysis_interval",
+        "loss_analysis_methods", "cycle_training", "cycle_period", "cycle_recon_epochs",
+        "cycle_variational_epochs",
+    ]
+    loss_cfg = cfg.get("loss_config", {})
+    result = {k: cfg.get(k) for k in keys if k in cfg}
+    result["loss_config"] = {
+        k: loss_cfg.get(k) for k in [
+            "use_mse", "use_l1", "use_perceptual_loss", "use_generation_quality",
+            "mse_weight", "l1_weight", "perceptual_weight", "generation_weight",
+            "full_vgg_perceptual", "ultra_full_vgg_perceptual",
+        ] if k in loss_cfg
+    }
+    return result
+
+
 class CheckpointManager:
     """Handles checkpoint saving and loading."""
     
@@ -274,7 +367,7 @@ class CheckpointManager:
         
         return checkpoint_path
     
-    def load_checkpoint(self, checkpoint_path: str, model, optimizer, scheduler) -> Tuple[bool, int, Dict[str, float]]:
+    def load_checkpoint(self, checkpoint_path: str, model, optimizer, scheduler) -> Tuple[bool, int, Dict[str, float], Dict[str, Any]]:
         """
         Load training checkpoint.
         
@@ -288,7 +381,7 @@ class CheckpointManager:
             Tuple of (success, epoch, metrics)
         """
         if not os.path.exists(checkpoint_path):
-            return False, 0, {}
+            return False, 0, {}, {}
         
         try:
             checkpoint = torch.load(checkpoint_path, map_location=self.device)
@@ -309,16 +402,17 @@ class CheckpointManager:
             # Load metrics
             train_metrics = checkpoint.get('train_metrics', {})
             val_metrics = checkpoint.get('val_metrics', {})
+            loaded_config = checkpoint.get('config', {})
             
             print(f"  ✅ Checkpoint loaded: {checkpoint_path}")
             print(f"  • Epoch: {epoch}")
             print(f"  • Best validation loss: {self.best_val_loss:.6f}")
             
-            return True, epoch, {'train': train_metrics, 'val': val_metrics}
+            return True, epoch, {'train': train_metrics, 'val': val_metrics}, loaded_config
             
         except Exception as e:
             print(f"  ⚠️  Error loading checkpoint: {e}")
-            return False, 0, {}
+            return False, 0, {}, {}
 
 
 class FileManager:
@@ -414,6 +508,7 @@ class TrainingUtilities:
         self.config_manager = ConfigurationManager(config)
         self.checkpoint_manager = CheckpointManager(config, device)
         self.file_manager = FileManager(config)
+        self.experiment_logger = ExperimentLogger(config)
     
     def print_configuration(self, mode: str = "Fresh") -> None:
         """Print training configuration."""
@@ -447,7 +542,7 @@ class TrainingUtilities:
             model, optimizer, scheduler, epoch, train_metrics, val_metrics, is_best
         )
     
-    def load_checkpoint(self, checkpoint_path: str, model, optimizer, scheduler) -> Tuple[bool, int, Dict[str, float]]:
+    def load_checkpoint(self, checkpoint_path: str, model, optimizer, scheduler) -> Tuple[bool, int, Dict[str, float], Dict[str, Any]]:
         """Load training checkpoint."""
         return self.checkpoint_manager.load_checkpoint(checkpoint_path, model, optimizer, scheduler)
     
