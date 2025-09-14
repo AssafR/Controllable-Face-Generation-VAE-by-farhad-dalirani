@@ -535,7 +535,7 @@ class UnifiedVAETrainer:
             print(f"  🖼️  Generating sample images...")
         
         # Create sample_images directory
-        sample_dir = "sample_images"
+        sample_dir = self.config.get('sample_images_dir', 'sample_images')
         os.makedirs(sample_dir, exist_ok=True)
         
         with torch.no_grad():

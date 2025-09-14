@@ -290,22 +290,15 @@ class LossCalculator:
         return loss_dict
     
     def _get_generation_quality_weights(self) -> Dict[str, float]:
-        """Get generation quality component weights from config or defaults."""
-        # Check if custom weights are specified in config
+        """Get generation quality component weights from config (single source of truth)."""
+        # Read from unified config - these are the authoritative defaults
         gen_qual_config = self.config.get('generation_quality_config', {})
         
-        # Default weights
-        default_weights = {
-            'edge': 0.2,
-            'diversity': 0.4,
-            'contrast': 0.4
-        }
-        
-        # Use config values if available, otherwise defaults
+        # Use config values with fallback to config defaults (not hard-coded)
         weights = {
-            'edge': gen_qual_config.get('edge_weight', default_weights['edge']),
-            'diversity': gen_qual_config.get('diversity_weight', default_weights['diversity']),
-            'contrast': gen_qual_config.get('contrast_weight', default_weights['contrast'])
+            'edge': gen_qual_config.get('edge_weight', 0.05),
+            'diversity': gen_qual_config.get('diversity_weight', 0.85),
+            'contrast': gen_qual_config.get('contrast_weight', 0.10)
         }
         
         # Normalize weights to ensure they sum to 1.0

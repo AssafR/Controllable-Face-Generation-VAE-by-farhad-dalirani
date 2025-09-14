@@ -254,6 +254,42 @@ class UnifiedVAETrainer:
                 
                 # Forward pass
                 emb_mean, emb_log_var, reconst = self.model(images)
+
+                # Guard against non-finite encoder/decoder outputs before loss
+                if not (torch.isfinite(emb_mean).all() and torch.isfinite(emb_log_var).all() and torch.isfinite(reconst).all()):
+                    print("⚠️  Non-finite model outputs detected. Diagnostics:")
+                    def _tensor_stats_local(t):
+                        try:
+                            t2 = torch.nan_to_num(t, nan=0.0, posinf=0.0, neginf=0.0)
+                            return (
+                                float(t2.min().item()),
+                                float(t2.max().item()),
+                                float(t2.abs().max().item()),
+                            )
+                        except Exception:
+                            return (0.0, 0.0, 0.0)
+                    imin, imax, imaxabs = _tensor_stats_local(images)
+                    mmin, mmax, mmaxabs = _tensor_stats_local(emb_mean)
+                    lvmin, lvmax, lvmaxabs = _tensor_stats_local(emb_log_var)
+                    rmin, rmax, rmaxabs = _tensor_stats_local(reconst)
+                    print(f"    • images   range: [{imin:.3e}, {imax:.3e}] | max|x|={imaxabs:.3e}")
+                    print(f"    • emb_mean range: [{mmin:.3e}, {mmax:.3e}] | max|x|={mmaxabs:.3e}")
+                    print(f"    • emb_logv range: [{lvmin:.3e}, {lvmax:.3e}] | max|x|={lvmaxabs:.3e}")
+                    print(f"    • reconst  range: [{rmin:.3e}, {rmax:.3e}] | max|x|={rmaxabs:.3e}")
+                    # Backoff LR and skip this batch
+                    lr_min = float(self.config.get('lr_min', 1e-7))
+                    for g in self.optimizer.param_groups:
+                        old_lr = g['lr']
+                        g['lr'] = max(lr_min, old_lr * 0.5)
+                    new_lr = self.optimizer.param_groups[0]['lr']
+                    print(f"    • Action: skipped batch due to non-finite outputs, reduced LR to {new_lr:.2e}")
+                    continue
+
+                # Sample mid-epoch reconstructions if needed
+                if is_training:
+                    # Use tqdm's write if available to avoid breaking the bar
+                    writer = getattr(pbar, 'write', None)
+                    self._sample_mid_epoch_reconstructions(images, reconst, epoch, batch_idx, len(data_loader), writer)
                 
                 # Immediate numerical checks
                 def _tensor_stats(t):
@@ -410,7 +446,9 @@ class UnifiedVAETrainer:
         
         # Overall health score
         overall_health = analysis_summary['overall_health_score']
-        health_icon = "🟢" if overall_health > 0.7 else "🟡" if overall_health > 0.4 else "🔴"
+        health_good = self.config.get('health_score_good', 0.7)
+        health_fair = self.config.get('health_score_fair', 0.4)
+        health_icon = "🟢" if overall_health > health_good else "🟡" if overall_health > health_fair else "🔴"
         print(f"{health_icon} Overall Health Score: {overall_health:.3f}")
         
         # Method-specific results
@@ -530,7 +568,8 @@ class UnifiedVAETrainer:
                 # Only reduce LR if really diverging during MSE priority
                 if trend == 'worsening' and improvement_rate < -0.15:  # 15% worsening (vs 5%)
                     current_lr = self.optimizer.param_groups[0]['lr']
-                    new_lr = current_lr * 0.9  # Smaller reduction (vs 0.8)
+                    lr_min_factor = self.config.get('lr_min_reduction_factor', 0.5)
+                    new_lr = current_lr * (1.0 - lr_min_factor)  # Smaller reduction
                     for param_group in self.optimizer.param_groups:
                         param_group['lr'] = new_lr
                     print(f"  🔻 Learning rate reduced during MSE priority: {current_lr:.2e} → {new_lr:.2e}")
@@ -538,7 +577,8 @@ class UnifiedVAETrainer:
                 # Normal LR adjustment logic
                 if trend == 'worsening' and improvement_rate < -0.05:  # 5% worsening
                     current_lr = self.optimizer.param_groups[0]['lr']
-                    new_lr = current_lr * 0.8  # Reduce by 20%
+                    lr_factor = self.config.get('lr_reduction_factor', 0.8)
+                    new_lr = current_lr * lr_factor  # Reduce by configurable amount
                     for param_group in self.optimizer.param_groups:
                         param_group['lr'] = new_lr
                     print(f"  🔻 Learning rate reduced due to diverging trend: {current_lr:.2e} → {new_lr:.2e}")
@@ -556,7 +596,8 @@ class UnifiedVAETrainer:
             objective_balance = pareto_analysis.analysis_data.get('objective_balance', 1.0)
             
             # Suggest weight adjustments if not Pareto optimal
-            if not is_pareto_optimal and objective_balance < 0.5:
+            pareto_threshold = self.config.get('pareto_balance_threshold', 0.5)
+            if not is_pareto_optimal and objective_balance < pareto_threshold:
                 print(f"  🎯 Pareto analysis suggests weight rebalancing (balance: {objective_balance:.2f})")
         
         # Early stopping suggestions based on constant weight analysis
@@ -566,7 +607,8 @@ class UnifiedVAETrainer:
             stability = constant_analysis.analysis_data.get('stability', 0.5)
             
             # Suggest early stopping if reference loss is stable and high
-            if trend == 'stable' and stability > 0.8:
+            convergence_threshold = self.config.get('early_stopping_convergence_threshold', 0.8)
+            if trend == 'stable' and stability > convergence_threshold:
                 print(f"  ⏹️  Constant weight analysis suggests training may have converged")
     
     def _check_early_stopping(self, analysis_results, epoch, early_stopping_patience):
@@ -620,7 +662,8 @@ class UnifiedVAETrainer:
                         except Exception:
                             phase_aware_ok = True
                     # Stop if reference loss is stable and high (converged) and phase-aware conditions pass
-                    if trend == 'stable' and stability > 0.9 and phase_aware_ok:
+                    stability_threshold = self.config.get('early_stopping_stability_threshold', 0.9)
+                    if trend == 'stable' and stability > stability_threshold and phase_aware_ok:
                         print(f"  ⏹️  Early stopping: Reference loss converged (stability: {stability:.2f})")
                         return True
             
@@ -642,7 +685,8 @@ class UnifiedVAETrainer:
             overall_health = analysis_summary.get('overall_health_score', 0.5)
             
             # Stop if health is consistently poor
-            if overall_health < 0.2 and epoch > 10:  # Only after 10 epochs
+            health_threshold = self.config.get('early_stopping_health_threshold', 0.2)
+            if overall_health < health_threshold and epoch > 10:  # Only after 10 epochs
                 print(f"  ⏹️  Early stopping: Poor training health ({overall_health:.2f})")
                 return True
         
@@ -678,6 +722,56 @@ class UnifiedVAETrainer:
         except Exception:
             return weights_line
 
+    def _sample_mid_epoch_reconstructions(self, images, reconst, epoch, batch_idx, total_batches, writer=None):
+        """Sample reconstruction images from the current training batch for mid-epoch monitoring.
+        writer: optional callable like tqdm.write to avoid disrupting progress bars.
+        """
+        # Only sample at the middle batch of each epoch
+        if batch_idx == total_batches // 2:
+            log_fn = writer if callable(writer) else print
+            log_fn(f"  🔍 Sampling mid-epoch reconstructions from batch {batch_idx+1}/{total_batches}...")
+            
+            # Sample first 4 images from the current batch
+            sample_size = min(4, images.size(0))
+            sample_images = images[:sample_size]
+            sample_reconst = reconst[:sample_size]
+            
+            # Convert to numpy for display
+            with torch.no_grad():
+                orig_np = sample_images.permute(0, 2, 3, 1).cpu().numpy()
+                recon_np = sample_reconst.permute(0, 2, 3, 1).cpu().numpy()
+            
+            # Use centralized FilenameManager as single source of truth
+            from utils import FilenameManager
+            fm = FilenameManager(self.config.get('config_name', 'unified'), self.config.get('run_id'))
+            
+            # Save reconstruction comparison
+            recon_path = fm.get_filename('reconstruction_samples', epoch=epoch+1, suffix="_mid_epoch")
+            # Ensure directory exists (FilenameManager targets sample_images/)
+            os.makedirs(os.path.dirname(recon_path), exist_ok=True)
+            comp_title = f"Mid-Epoch {epoch+1} - Batch {batch_idx+1}/{total_batches}"
+            
+            # Suppress verbose prints from utilities to keep tqdm clean
+            import contextlib, io
+            silent_buf = io.StringIO()
+            with contextlib.redirect_stdout(silent_buf):
+                display_comparison_grid(
+                    orig_np,
+                    recon_np,
+                    titles=[f"Batch {batch_idx+1} - Pair {i+1}" for i in range(sample_size)],
+                    max_cols=2,
+                    figsize=(12, 8),
+                    save_path=recon_path,
+                    suptitle=comp_title,
+                )
+            log_fn(f"  ✅ Mid-epoch reconstruction samples saved: {recon_path}")
+            
+            try:
+                # Log the saved image
+                self.utilities.experiment_logger.log_image_saved(recon_path, kind='reconstruction', epoch=epoch+1)
+            except Exception:
+                pass
+
     def generate_samples(self, epoch, val_data, suffix="", epoch_metrics=None):
         """Generate sample images."""
         if suffix:
@@ -686,7 +780,7 @@ class UnifiedVAETrainer:
             print(f"  🖼️  Generating sample images...")
         
         # Create sample_images directory
-        sample_dir = "sample_images"
+        sample_dir = self.config.get('sample_images_dir', 'sample_images')
         os.makedirs(sample_dir, exist_ok=True)
         
         with torch.no_grad():
@@ -885,10 +979,6 @@ class UnifiedVAETrainer:
         # Training phase
         train_metrics = self.train_epoch(train_loader, epoch)
         
-        # Generate mid-epoch samples for closer monitoring
-        if epoch > 0 and epoch % 2 == 0:  # Every 2 epochs after the first
-            print(f"  🔍 Generating mid-epoch samples...")
-            self.generate_samples(epoch, val_loader.dataset, suffix="_mid_epoch")
         
         # Validation phase
         val_metrics = self.validate_epoch(val_loader, epoch)
@@ -1209,10 +1299,20 @@ def main():
                        help='Disable convergence-based early stopping; rely on patience only')
     parser.add_argument('--disable-genq', action='store_true',
                        help='Disable Generation Quality loss for this run')
+    # New simplified run identity and resume flags
+    parser.add_argument('--run-id', type=str,
+                       help='Set explicit run_id (namespaces checkpoints and artifacts)')
+    parser.add_argument('--resume', action='store_true',
+                       help='Resume if a matching checkpoint exists; otherwise start fresh')
+    parser.add_argument('--experiment-name', type=str,
+                       help='Optional human-readable tag appended to config_name for artifact naming')
+    # Backward-compat: map legacy --resume-run-id to new flags
     parser.add_argument('--resume-run-id', type=str,
-                       help='Resume by specific run_id (loads matching checkpoint if available)')
+                       help=argparse.SUPPRESS)
     parser.add_argument('--optimizer', type=str, choices=['adam', 'adamw', 'sgd', 'rmsprop'],
                        help='Select optimizer for this run (overrides config)')
+    parser.add_argument('--embedding-size', type=int,
+                       help='Override embedding/latent space size (e.g., 768 for 50% larger than default 512)')
     
     args = parser.parse_args()
     
@@ -1231,6 +1331,9 @@ def main():
     if args.optimizer is not None:
         config['optimizer'] = args.optimizer.lower()
 
+    # Model parameter overrides from CLI
+    if args.embedding_size is not None:
+        config['embedding_size'] = int(args.embedding_size)
     
     # Override with command line arguments
     config['loss_analysis_interval'] = args.loss_analysis_interval
@@ -1380,9 +1483,35 @@ def main():
     if args.resume_run_id:
         config['run_id'] = args.resume_run_id
 
-    # Create and run trainer
+    # Apply experiment-name to config_name for readability (does not change presets)
+    if args.experiment_name:
+        try:
+            config['config_name'] = f"{config['config_name']}__{args.experiment_name}"
+        except Exception:
+            pass
+    # Run ID handling: prefer --run-id; fall back to legacy --resume-run-id; otherwise auto-generated
+    if args.run_id:
+        config['run_id'] = args.run_id
+    elif args.resume_run_id:
+        config['run_id'] = args.resume_run_id
+    # Determine resume behavior: precedence --resume/--no-resume, else auto (resume if checkpoint exists)
+    resume_flag = None
+    if args.resume and not args.no_resume:
+        resume_flag = True
+    elif args.no_resume and not args.resume:
+        resume_flag = False
+    # Trainer
     trainer = UnifiedVAETrainer(config)
-    trainer.train(resume=not args.no_resume)
+    # Auto-resume: if neither flag specified, resume if a checkpoint exists for current run_id/config_name
+    if resume_flag is None:
+        try:
+            probe_ckpt = trainer.utilities.get_filename('checkpoint')
+            auto_resume = os.path.exists(probe_ckpt)
+        except Exception:
+            auto_resume = False
+        trainer.train(resume=auto_resume)
+    else:
+        trainer.train(resume=resume_flag)
 
 
 if __name__ == "__main__":

@@ -34,23 +34,21 @@ class StrategyController:
 
         # Phase multipliers allow fine-grained control per loss key
         # Keys should match LossWeightManager.supported_losses
-        self.recon_multipliers: Dict[str, float] = config.get('cycle_recon_multipliers', {
-            'mse_weight': 1.5,
-            'l1_weight': 1.2,
-            'perceptual_weight': 1.0,
-            'generation_weight': 0.5,
-            'beta': 0.5,
-        })
-        self.variational_multipliers: Dict[str, float] = config.get('cycle_variational_multipliers', {
-            'mse_weight': 0.8,
-            'l1_weight': 0.8,
-            'perceptual_weight': 0.8,
-            'generation_weight': 1.5,
-            'beta': 1.5,
-        })
+        # Use single source of truth from config
+        self.recon_multipliers: Dict[str, float] = self._get_cycle_multipliers(config, 'cycle_recon_multipliers')
+        self.variational_multipliers: Dict[str, float] = self._get_cycle_multipliers(config, 'cycle_variational_multipliers')
 
         self._phase_name: Optional[str] = None
         self._phase_pos: int = 0
+
+    def _get_cycle_multipliers(self, config: Dict, key: str) -> Dict[str, float]:
+        """Get cycle multipliers from config with fallback to base config defaults."""
+        multipliers = config.get(key, {})
+        if not multipliers:
+            # Fallback to base config defaults
+            base_config = config.get('base_config', {})
+            multipliers = base_config.get(key, {})
+        return multipliers
 
     def set_epoch(self, epoch: int) -> None:
         self.current_epoch = epoch

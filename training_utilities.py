@@ -16,9 +16,14 @@ class RunIdManager:
     """Generates and holds a single run_id per process (single source of truth)."""
 
     def __init__(self, config: Dict[str, Any]):
-        base = config.get('config_name', 'unified')
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.run_id = f"{base}_{timestamp}"
+        # Honor pre-set run_id (e.g., from CLI) to avoid overriding explicit namespaces
+        preconfigured = config.get('run_id')
+        if preconfigured:
+            self.run_id = str(preconfigured)
+        else:
+            base = config.get('config_name', 'unified')
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            self.run_id = f"{base}_{timestamp}"
 
     def get_run_id(self) -> str:
         return self.run_id
@@ -30,6 +35,18 @@ class ConfigurationManager:
     
     def __init__(self, config: Dict[str, Any]):
         self.config = config
+    
+    def _get_genqual_weights(self) -> Dict[str, float]:
+        """Get normalized GenQual weights from config (single source of truth)."""
+        gq_cfg = self.config.get('generation_quality_config', {}) or {}
+        edge_w = float(gq_cfg.get('edge_weight', 0.05))
+        div_w = float(gq_cfg.get('diversity_weight', 0.85))
+        ctr_w = float(gq_cfg.get('contrast_weight', 0.10))
+        total_w = edge_w + div_w + ctr_w
+        if total_w > 0:
+            return {"edge": edge_w/total_w, "diversity": div_w/total_w, "contrast": ctr_w/total_w}
+        else:
+            return {"edge": edge_w, "diversity": div_w, "contrast": ctr_w}
     
     def print_configuration(self, mode: str = "Fresh") -> None:
         """Print comprehensive training configuration."""
@@ -167,9 +184,8 @@ class ConfigurationManager:
         
         # Generation quality breakdown (if enabled)
         if loss_config.get('use_generation_quality', False):
-            # Use default weights for display (actual weights managed by LossWeightManager)
-            gen_qual_weights = {'edge': 0.4, 'diversity': 0.3, 'contrast': 0.3}
-            print(f"  • GenQual breakdown: Edge ({gen_qual_weights['edge']:.0%}), Diversity ({gen_qual_weights['diversity']:.0%}), Contrast ({gen_qual_weights['contrast']:.0%})")
+            weights = self._get_genqual_weights()
+            print(f"  • GenQual breakdown: Edge ({weights['edge']:.0%}), Diversity ({weights['diversity']:.0%}), Contrast ({weights['contrast']:.0%})")
         
         # Beta configuration
         beta = self.config.get('beta', 1.0)
@@ -262,11 +278,14 @@ class ExperimentLogger:
             print(f"  ⚠️  Experiment logging failed: {e}")
 
     def log_run_start(self, command_line: str, mode: str, extras: Optional[Dict[str, Any]] = None) -> None:
+        # Use ConfigurationManager to get GenQual weights (single source of truth)
+        config_manager = ConfigurationManager(self.config)
         record = {
             "event": "run_start",
             "mode": mode,  # Fresh | Resume
             "command_line": command_line,
             "cwd": os.getcwd(),
+            "genqual_weights": config_manager._get_genqual_weights(),
         }
         if extras:
             record.update(extras)
@@ -368,7 +387,7 @@ class CheckpointManager:
             Path to saved checkpoint
         """
         config_name = self.config.get('config_name', 'unified')
-        checkpoint_dir = "checkpoints"
+        checkpoint_dir = self.config.get('checkpoint_dir', 'checkpoints')
         os.makedirs(checkpoint_dir, exist_ok=True)
         
         # Create checkpoint data

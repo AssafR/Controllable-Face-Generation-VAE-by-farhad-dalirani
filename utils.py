@@ -6,21 +6,24 @@ Contains filename generation, file management, and other helper functions.
 
 import os
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 
 
 class FilenameManager:
     """Centralized filename generation and management for VAE training."""
     
-    def __init__(self, config_name: str = 'unified', run_id: Optional[str] = None):
+    def __init__(self, config_name: str = 'unified', run_id: Optional[str] = None, config: Optional[Dict[str, Any]] = None):
         """
         Initialize filename manager.
         
         Args:
             config_name: Configuration name used as prefix for all files
+            run_id: Optional run ID for file naming
+            config: Configuration dictionary for directory paths
         """
         self.config_name = config_name
         self.run_id = run_id
+        self.config = config or {}
     
     def get_filename(self, file_type: str, epoch: Optional[int] = None, 
                     suffix: str = "", extension: str = "png", 
@@ -43,13 +46,15 @@ class FilenameManager:
             ValueError: If file_type is not recognized
         """
         if file_type == 'checkpoint':
-            return os.path.join("checkpoints", f"{self.config_name}_training_checkpoint.pth")
+            checkpoint_dir = self.config.get('checkpoint_dir', 'checkpoints')
+            return os.path.join(checkpoint_dir, f"{self.config_name}_training_checkpoint.pth")
         elif file_type == 'best_model':
             return os.path.join(model_save_path, f"{self.config_name}_vae_best_model.pth")
         elif file_type == 'periodic_checkpoint':
             if epoch is None:
                 raise ValueError("epoch is required for periodic_checkpoint")
-            return os.path.join("checkpoints", f"{self.config_name}_checkpoint_epoch_{epoch:03d}.pth")
+            checkpoint_dir = self.config.get('checkpoint_dir', 'checkpoints')
+            return os.path.join(checkpoint_dir, f"{self.config_name}_checkpoint_epoch_{epoch:03d}.pth")
         elif file_type == 'generated_samples':
             if epoch is None:
                 raise ValueError("epoch is required for generated_samples")
@@ -57,14 +62,16 @@ class FilenameManager:
             prefix = self.config_name
             if self.run_id:
                 prefix = f"{prefix}_{self.run_id}"
-            return os.path.join("sample_images", f"{prefix}_epoch_{epoch:03d}_generated{suffix}.png")
+            sample_dir = self.config.get('sample_images_dir', 'sample_images')
+            return os.path.join(sample_dir, f"{prefix}_epoch_{epoch:03d}_generated{suffix}.png")
         elif file_type == 'reconstruction_samples':
             if epoch is None:
                 raise ValueError("epoch is required for reconstruction_samples")
             prefix = self.config_name
             if self.run_id:
                 prefix = f"{prefix}_{self.run_id}"
-            return os.path.join("sample_images", f"{prefix}_epoch_{epoch:03d}_reconstruction{suffix}.png")
+            sample_dir = self.config.get('sample_images_dir', 'sample_images')
+            return os.path.join(sample_dir, f"{prefix}_epoch_{epoch:03d}_reconstruction{suffix}.png")
         elif file_type == 'final_samples':
             return f"{self.config_name}_final_samples.png"
         elif file_type == 'log_dir':

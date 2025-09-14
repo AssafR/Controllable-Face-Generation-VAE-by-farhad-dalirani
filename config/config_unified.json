@@ -15,7 +15,37 @@
         "log_dir": "logs",
         "dataset_dir": "celeba-dataset",
         "model_save_path": "model_weights/",
-        "dataset_subset": null
+        "sample_images_dir": "sample_images",
+        "checkpoint_dir": "checkpoints",
+        "dataset_subset": null,
+        "lr_reduction_factor": 0.8,
+        "lr_min_reduction_factor": 0.5,
+        "health_score_good": 0.7,
+        "health_score_fair": 0.4,
+        "health_score_poor": 0.2,
+        "grayscale_weights": [0.299, 0.587, 0.114],
+        "pareto_balance_threshold": 0.5,
+        "early_stopping_health_threshold": 0.2,
+        "early_stopping_stability_threshold": 0.9,
+        "early_stopping_convergence_threshold": 0.8,
+        "cycle_training_multipliers": {
+            "reconstruction_phase": 2.0,
+            "variational_phase": 1.0
+        },
+        "cycle_recon_multipliers": {
+            "mse_weight": 1.5,
+            "l1_weight": 1.2,
+            "perceptual_weight": 1.0,
+            "generation_weight": 0.5,
+            "beta": 0.5
+        },
+        "cycle_variational_multipliers": {
+            "mse_weight": 0.8,
+            "l1_weight": 0.8,
+            "perceptual_weight": 0.8,
+            "generation_weight": 1.5,
+            "beta": 1.5
+        }
     },
     
     "loss_presets": {
@@ -68,8 +98,8 @@
             "lpips_weight": 0.0,
             "generation_schedule": true,
             "generation_start": 0.0,
-            "generation_end": 0.05,
-            "generation_warmup_epochs": 20
+            "generation_end": 0.01,
+            "generation_warmup_epochs": 80
         },
         
         "perceptual": {
@@ -582,9 +612,9 @@
     "generation_quality_config": {
         "_comment": "Generation Quality loss component weights",
         "_description": "Controls the relative importance of edge, diversity, and contrast losses in Generation Quality",
-        "edge_weight": 0.4,
-        "diversity_weight": 0.3,
-        "contrast_weight": 0.3
+        "edge_weight": 0.05,
+        "diversity_weight": 0.85,
+        "contrast_weight": 0.10
     },
     
     "loss_analysis_presets": {
